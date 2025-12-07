@@ -33,7 +33,7 @@ class _CaptureReceiptScreenState extends ConsumerState<CaptureReceiptScreen> {
     });
 
     final imageService = ref.read(imageServiceProvider);
-    final (file, error) = await imageService.captureFromCamera();
+    final (file, error, _) = await imageService.captureFromCamera();
 
     if (!mounted) return;
 
@@ -66,7 +66,7 @@ class _CaptureReceiptScreenState extends ConsumerState<CaptureReceiptScreen> {
     });
 
     final imageService = ref.read(imageServiceProvider);
-    final (file, error) = await imageService.pickFromGallery();
+    final (file, error, _) = await imageService.pickFromGallery();
 
     if (!mounted) return;
 

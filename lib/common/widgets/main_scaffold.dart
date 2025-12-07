@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../services/router_service.dart';
 import '../services/services.dart';
@@ -93,18 +94,13 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
     setState(() => _isProcessing = true);
 
     final imageService = ref.read(imageServiceProvider);
-    final (file, error) = await imageService.captureFromCamera();
+    final (file, error, needsSettings) = await imageService.captureFromCamera();
 
     if (!mounted) return;
 
     if (error != null) {
       setState(() => _isProcessing = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(error),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      _showPermissionError(error, needsSettings);
       return;
     }
 
@@ -119,18 +115,13 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
     setState(() => _isProcessing = true);
 
     final imageService = ref.read(imageServiceProvider);
-    final (file, error) = await imageService.pickFromGallery();
+    final (file, error, needsSettings) = await imageService.pickFromGallery();
 
     if (!mounted) return;
 
     if (error != null) {
       setState(() => _isProcessing = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(error),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      _showPermissionError(error, needsSettings);
       return;
     }
 
@@ -139,6 +130,23 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
     } else {
       setState(() => _isProcessing = false);
     }
+  }
+
+  void _showPermissionError(String error, bool needsSettings) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(error),
+        backgroundColor: AppColors.error,
+        action: needsSettings
+            ? SnackBarAction(
+                label: 'Settings',
+                textColor: Colors.white,
+                onPressed: () => openAppSettings(),
+              )
+            : null,
+        duration: const Duration(seconds: 4),
+      ),
+    );
   }
 
   Future<void> _processImage(File file) async {

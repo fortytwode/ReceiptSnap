@@ -11,15 +11,41 @@ class ImageService {
   final ImagePicker _picker = ImagePicker();
 
   /// Request camera permission
-  Future<bool> requestCameraPermission() async {
-    final status = await Permission.camera.request();
-    return status.isGranted;
+  Future<(bool, bool)> requestCameraPermission() async {
+    var status = await Permission.camera.status;
+
+    // If permanently denied, user needs to go to Settings
+    if (status.isPermanentlyDenied) {
+      return (false, true); // (granted, needsSettings)
+    }
+
+    // Request permission
+    status = await Permission.camera.request();
+
+    if (status.isPermanentlyDenied) {
+      return (false, true);
+    }
+
+    return (status.isGranted, false);
   }
 
   /// Request photo library permission
-  Future<bool> requestPhotoLibraryPermission() async {
-    final status = await Permission.photos.request();
-    return status.isGranted || status.isLimited;
+  Future<(bool, bool)> requestPhotoLibraryPermission() async {
+    var status = await Permission.photos.status;
+
+    // If permanently denied, user needs to go to Settings
+    if (status.isPermanentlyDenied) {
+      return (false, true); // (granted, needsSettings)
+    }
+
+    // Request permission
+    status = await Permission.photos.request();
+
+    if (status.isPermanentlyDenied) {
+      return (false, true);
+    }
+
+    return (status.isGranted || status.isLimited, false);
   }
 
   /// Check if camera permission is granted
@@ -34,12 +60,15 @@ class ImageService {
   }
 
   /// Capture image from camera
-  /// Returns a tuple of (File?, errorMessage?)
-  Future<(File?, String?)> captureFromCamera() async {
+  /// Returns a tuple of (File?, errorMessage?, needsSettings?)
+  Future<(File?, String?, bool)> captureFromCamera() async {
     try {
-      final hasPermission = await requestCameraPermission();
+      final (hasPermission, needsSettings) = await requestCameraPermission();
       if (!hasPermission) {
-        return (null, 'Camera permission denied. Please enable in Settings.');
+        if (needsSettings) {
+          return (null, 'Camera access denied. Tap to open Settings.', true);
+        }
+        return (null, 'Camera permission denied.', false);
       }
 
       final XFile? image = await _picker.pickImage(
@@ -48,26 +77,29 @@ class ImageService {
         imageQuality: 90,
       );
 
-      if (image == null) return (null, null); // User cancelled
+      if (image == null) return (null, null, false); // User cancelled
 
-      return (File(image.path), null);
+      return (File(image.path), null, false);
     } catch (e) {
       debugPrint('Error capturing image: $e');
       // Check for specific errors
       if (e.toString().contains('camera_access_denied')) {
-        return (null, 'Camera access denied. Please enable in Settings.');
+        return (null, 'Camera access denied. Tap to open Settings.', true);
       }
-      return (null, 'Could not access camera: ${e.toString()}');
+      return (null, 'Could not access camera: ${e.toString()}', false);
     }
   }
 
   /// Pick image from gallery
-  /// Returns a tuple of (File?, errorMessage?)
-  Future<(File?, String?)> pickFromGallery() async {
+  /// Returns a tuple of (File?, errorMessage?, needsSettings?)
+  Future<(File?, String?, bool)> pickFromGallery() async {
     try {
-      final hasPermission = await requestPhotoLibraryPermission();
+      final (hasPermission, needsSettings) = await requestPhotoLibraryPermission();
       if (!hasPermission) {
-        return (null, 'Photo library permission denied. Please enable in Settings.');
+        if (needsSettings) {
+          return (null, 'Photo access denied. Tap to open Settings.', true);
+        }
+        return (null, 'Photo library permission denied.', false);
       }
 
       final XFile? image = await _picker.pickImage(
@@ -75,12 +107,12 @@ class ImageService {
         imageQuality: 90,
       );
 
-      if (image == null) return (null, null); // User cancelled
+      if (image == null) return (null, null, false); // User cancelled
 
-      return (File(image.path), null);
+      return (File(image.path), null, false);
     } catch (e) {
       debugPrint('Error picking image: $e');
-      return (null, 'Could not access photo library: ${e.toString()}');
+      return (null, 'Could not access photo library: ${e.toString()}', false);
     }
   }
 
@@ -110,21 +142,21 @@ class ImageService {
   }
 
   /// Capture and compress image in one call
-  Future<(File?, String?)> captureAndCompress() async {
-    final (file, error) = await captureFromCamera();
-    if (file == null) return (null, error);
+  Future<(File?, String?, bool)> captureAndCompress() async {
+    final (file, error, needsSettings) = await captureFromCamera();
+    if (file == null) return (null, error, needsSettings);
 
     final compressed = await compressImage(file);
-    return (compressed, null);
+    return (compressed, null, false);
   }
 
   /// Pick and compress image in one call
-  Future<(File?, String?)> pickAndCompress() async {
-    final (file, error) = await pickFromGallery();
-    if (file == null) return (null, error);
+  Future<(File?, String?, bool)> pickAndCompress() async {
+    final (file, error, needsSettings) = await pickFromGallery();
+    if (file == null) return (null, error, needsSettings);
 
     final compressed = await compressImage(file);
-    return (compressed, null);
+    return (compressed, null, false);
   }
 }
 
