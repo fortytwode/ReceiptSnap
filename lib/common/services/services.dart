@@ -5,6 +5,7 @@ export 'database_service.dart';
 export 'export_service.dart';
 export 'image_service.dart';
 export 'mock_data.dart';
+export 'ocr_service.dart';
 export 'receipts_service.dart';
 export 'reports_service.dart';
 export 'router_service.dart';

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
@@ -8,13 +9,15 @@ import 'api_client.dart';
 import 'api_config.dart';
 import 'database_service.dart';
 import 'mock_data.dart';
+import 'ocr_service.dart';
 
 /// Receipts service for managing receipt data
 class ReceiptsService {
   final ApiClient _api;
   final DatabaseService _db;
+  final OcrService _ocr;
 
-  ReceiptsService(this._api, this._db);
+  ReceiptsService(this._api, this._db, this._ocr);
 
   // In-memory mock storage - only used when mockMode = true
   static List<Receipt>? _mockReceiptsStorage;
@@ -122,28 +125,39 @@ class ReceiptsService {
     return newReceipt;
   }
 
-  /// Poll for OCR completion (simulates backend OCR processing)
-  Future<Receipt> pollForOcrCompletion(
-    String id, {
-    int maxAttempts = 30,
-    Duration interval = const Duration(seconds: 1),
-  }) async {
-    // Simulate OCR processing - in production this would call the backend
-    await Future.delayed(const Duration(seconds: 2));
+  /// Process receipt with OCR
+  Future<Receipt> processReceiptWithOcr(String id) async {
+    final receipt = await getReceipt(id);
+    final imageFile = File(receipt.imageUrl);
 
-    // Simulated extracted data - amount is null since we don't have real OCR yet
-    // User will need to enter the amount manually
+    // Run OCR on the image
+    OcrResult ocrResult;
+    try {
+      if (await imageFile.exists()) {
+        debugPrint('Running OCR on: ${receipt.imageUrl}');
+        ocrResult = await _ocr.processImage(imageFile);
+        debugPrint('OCR Result: $ocrResult');
+      } else {
+        debugPrint('Image file does not exist: ${receipt.imageUrl}');
+        ocrResult = const OcrResult(rawText: '');
+      }
+    } catch (e) {
+      debugPrint('OCR Error: $e');
+      ocrResult = const OcrResult(rawText: '');
+    }
+
+    // Create updated receipt with OCR results
     final updated = Receipt(
       id: id,
-      imageUrl: (await getReceipt(id)).imageUrl,
-      merchant: 'Scanned Merchant',
-      date: DateTime.now(),
-      amount: null, // Set to null - user must enter manually
-      currency: null, // Set to null - user must select
-      category: 'Other',
+      imageUrl: receipt.imageUrl,
+      merchant: ocrResult.merchant ?? 'Unknown Merchant',
+      date: ocrResult.date ?? DateTime.now(),
+      amount: ocrResult.amount, // May be null if not detected
+      currency: ocrResult.currency, // May be null if not detected
+      category: _inferCategory(ocrResult.merchant),
       ocrStatus: OcrStatus.needsConfirmation,
       reportId: null,
-      createdAt: DateTime.now(),
+      createdAt: receipt.createdAt,
     );
 
     if (ApiConfig.mockMode) {
@@ -156,6 +170,58 @@ class ReceiptsService {
 
     await _db.updateReceipt(updated);
     return updated;
+  }
+
+  /// Infer category from merchant name
+  String _inferCategory(String? merchant) {
+    if (merchant == null) return 'Other';
+    final lower = merchant.toLowerCase();
+
+    // Common category mappings
+    if (lower.contains('hotel') ||
+        lower.contains('inn') ||
+        lower.contains('lodge') ||
+        lower.contains('airbnb') ||
+        lower.contains('smeštaj')) {
+      return 'Lodging';
+    }
+    if (lower.contains('uber') ||
+        lower.contains('lyft') ||
+        lower.contains('taxi') ||
+        lower.contains('bolt')) {
+      return 'Transportation';
+    }
+    if (lower.contains('airline') ||
+        lower.contains('flight') ||
+        lower.contains('delta') ||
+        lower.contains('united') ||
+        lower.contains('american')) {
+      return 'Travel';
+    }
+    if (lower.contains('starbucks') ||
+        lower.contains('coffee') ||
+        lower.contains('cafe') ||
+        lower.contains('restaurant') ||
+        lower.contains('food') ||
+        lower.contains('doručak')) {
+      return 'Food & Drink';
+    }
+    if (lower.contains('office') ||
+        lower.contains('staples') ||
+        lower.contains('depot')) {
+      return 'Office Supplies';
+    }
+
+    return 'Other';
+  }
+
+  /// Legacy method name for backwards compatibility
+  Future<Receipt> pollForOcrCompletion(
+    String id, {
+    int maxAttempts = 30,
+    Duration interval = const Duration(seconds: 1),
+  }) async {
+    return processReceiptWithOcr(id);
   }
 
   /// Update a receipt
@@ -203,5 +269,6 @@ class ReceiptsService {
 final receiptsServiceProvider = Provider<ReceiptsService>((ref) {
   final api = ref.watch(apiClientProvider);
   final db = ref.watch(databaseServiceProvider);
-  return ReceiptsService(api, db);
+  final ocr = ref.watch(ocrServiceProvider);
+  return ReceiptsService(api, db, ocr);
 });

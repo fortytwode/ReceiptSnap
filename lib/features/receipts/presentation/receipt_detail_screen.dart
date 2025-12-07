@@ -11,6 +11,7 @@ import '../../../common/models/models.dart';
 import '../../../common/services/services.dart';
 import '../../../common/theme/app_theme.dart';
 import '../../../common/widgets/widgets.dart';
+import '../../reports/providers/reports_provider.dart';
 import '../providers/receipts_provider.dart';
 
 class ReceiptDetailScreen extends ConsumerStatefulWidget {
@@ -96,16 +97,21 @@ class _ReceiptDetailScreenState extends ConsumerState<ReceiptDetailScreen> {
         ocrStatus: OcrStatus.confirmed,
       );
 
-      final service = ref.read(receiptsServiceProvider);
-      await service.updateReceipt(updated);
+      final receiptsService = ref.read(receiptsServiceProvider);
+      await receiptsService.updateReceipt(updated);
 
-      // Refresh receipts list
+      // Auto-add to active report
+      final reportsService = ref.read(reportsServiceProvider);
+      await reportsService.addReceiptToActiveReport(updated.id);
+
+      // Refresh lists
       ref.read(receiptsProvider.notifier).refresh();
+      ref.read(reportsProvider.notifier).refresh();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Receipt saved'),
+            content: Text('Receipt saved and added to your report!'),
             backgroundColor: AppColors.success,
           ),
         );
@@ -389,7 +395,7 @@ class _ReceiptDetailScreenState extends ConsumerState<ReceiptDetailScreen> {
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 16),
                         ),
-                        child: const Text('Save & Confirm'),
+                        child: const Text('Confirm & Add to Report'),
                       ),
 
                     if (receipt.isInReport)

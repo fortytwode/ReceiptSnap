@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/models.dart';
@@ -7,13 +8,15 @@ import 'api_config.dart';
 import 'database_service.dart';
 import 'mock_data.dart';
 import 'receipts_service.dart';
+import 'storage_service.dart';
 
 /// Reports service for managing expense reports
 class ReportsService {
   final ApiClient _api;
   final DatabaseService _db;
+  final StorageService _storage;
 
-  ReportsService(this._api, this._db);
+  ReportsService(this._api, this._db, this._storage);
 
   // In-memory mock storage
   static List<Report>? _mockReports;
@@ -210,11 +213,95 @@ class ReportsService {
     // TODO: Implement CSV export
     await Future.delayed(const Duration(seconds: 1));
   }
+
+  /// Get or create the active (draft) report
+  /// Creates a new report named after current month if none exists
+  Future<Report> getOrCreateActiveReport() async {
+    final activeId = _storage.activeReportId;
+
+    // Check if we have an active report
+    if (activeId != null) {
+      try {
+        final report = await getReport(activeId);
+        // Only return if it's still a draft
+        if (report.status == ReportStatus.draft) {
+          return report;
+        }
+      } catch (e) {
+        // Report not found or error, create new one
+      }
+    }
+
+    // Create a new active report
+    final now = DateTime.now();
+    final monthName = DateFormat.MMMM().format(now);
+    final title = '$monthName ${now.year} Expenses';
+
+    final report = await createReport(
+      title: title,
+      startDate: DateTime(now.year, now.month, 1),
+      endDate: DateTime(now.year, now.month + 1, 0), // Last day of month
+      receiptIds: [],
+    );
+
+    await _storage.setActiveReportId(report.id);
+    return report;
+  }
+
+  /// Add a receipt to the active report
+  Future<Report> addReceiptToActiveReport(String receiptId) async {
+    final report = await getOrCreateActiveReport();
+
+    // Link the receipt to this report
+    if (ApiConfig.mockMode) {
+      final receiptIndex = ReceiptsService.mockReceipts
+          .indexWhere((r) => r.id == receiptId);
+      if (receiptIndex != -1) {
+        ReceiptsService.mockReceipts[receiptIndex] =
+            ReceiptsService.mockReceipts[receiptIndex]
+                .copyWith(reportId: report.id);
+      }
+
+      // Update report with new receipt
+      final reportIndex = _reports.indexWhere((r) => r.id == report.id);
+      if (reportIndex != -1) {
+        final updatedReceipts = List<Receipt>.from(_reports[reportIndex].receipts);
+        final receipt = ReceiptsService.mockReceipts
+            .firstWhere((r) => r.id == receiptId);
+        updatedReceipts.add(receipt);
+
+        final total = updatedReceipts.fold<double>(
+          0,
+          (sum, r) => sum + (r.amount ?? 0),
+        );
+
+        _reports[reportIndex] = _reports[reportIndex].copyWith(
+          receipts: updatedReceipts,
+          totalAmount: total,
+        );
+        return _reports[reportIndex];
+      }
+    } else {
+      await _db.linkReceiptsToReport([receiptId], report.id);
+    }
+
+    return await getReport(report.id);
+  }
+
+  /// Called after submitting a report - creates new active report
+  Future<void> onReportSubmitted(String reportId) async {
+    final currentActiveId = _storage.activeReportId;
+    if (currentActiveId == reportId) {
+      // Clear active report - next getOrCreateActiveReport will create new one
+      await _storage.setActiveReportId(null);
+    }
+  }
 }
 
 /// Provider for ReportsService
 final reportsServiceProvider = Provider<ReportsService>((ref) {
   final api = ref.watch(apiClientProvider);
   final db = ref.watch(databaseServiceProvider);
-  return ReportsService(api, db);
+  final storage = ref.watch(storageServiceProvider);
+  return ReportsService(api, db, storage);
 });

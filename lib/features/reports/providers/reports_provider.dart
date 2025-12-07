@@ -244,6 +244,8 @@ class SubmitReportNotifier extends StateNotifier<SubmitReportState> {
 
     try {
       final report = await _service.submitReport(id);
+      // Clear active report so a new one is created next time
+      await _service.onReportSubmitted(id);
       state = SubmitReportState(submittedReport: report);
       return report;
     } catch (e) {

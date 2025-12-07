@@ -14,6 +14,7 @@ class StorageKeys {
   static const String defaultCurrency = 'default_currency';
   static const String userName = 'user_name';
   static const String userEmail = 'user_email';
+  static const String activeReportId = 'active_report_id';
 }
 
 /// Storage service for persistent data
@@ -59,6 +60,17 @@ class StorageService {
 
   Future<void> setDefaultCurrency(String currency) =>
       _prefs.setString(StorageKeys.defaultCurrency, currency);
+
+  // Active Report
+  String? get activeReportId => _prefs.getString(StorageKeys.activeReportId);
+
+  Future<void> setActiveReportId(String? id) async {
+    if (id == null) {
+      await _prefs.remove(StorageKeys.activeReportId);
+    } else {
+      await _prefs.setString(StorageKeys.activeReportId, id);
+    }
+  }
 
   // Clear all
   Future<void> clearAll() => _prefs.clear();
