@@ -34,11 +34,12 @@ class ImageService {
   }
 
   /// Capture image from camera
-  Future<File?> captureFromCamera() async {
+  /// Returns a tuple of (File?, errorMessage?)
+  Future<(File?, String?)> captureFromCamera() async {
     try {
       final hasPermission = await requestCameraPermission();
       if (!hasPermission) {
-        return null;
+        return (null, 'Camera permission denied. Please enable in Settings.');
       }
 
       final XFile? image = await _picker.pickImage(
@@ -47,21 +48,26 @@ class ImageService {
         imageQuality: 90,
       );
 
-      if (image == null) return null;
+      if (image == null) return (null, null); // User cancelled
 
-      return File(image.path);
+      return (File(image.path), null);
     } catch (e) {
       debugPrint('Error capturing image: $e');
-      return null;
+      // Check for specific errors
+      if (e.toString().contains('camera_access_denied')) {
+        return (null, 'Camera access denied. Please enable in Settings.');
+      }
+      return (null, 'Could not access camera: ${e.toString()}');
     }
   }
 
   /// Pick image from gallery
-  Future<File?> pickFromGallery() async {
+  /// Returns a tuple of (File?, errorMessage?)
+  Future<(File?, String?)> pickFromGallery() async {
     try {
       final hasPermission = await requestPhotoLibraryPermission();
       if (!hasPermission) {
-        return null;
+        return (null, 'Photo library permission denied. Please enable in Settings.');
       }
 
       final XFile? image = await _picker.pickImage(
@@ -69,12 +75,12 @@ class ImageService {
         imageQuality: 90,
       );
 
-      if (image == null) return null;
+      if (image == null) return (null, null); // User cancelled
 
-      return File(image.path);
+      return (File(image.path), null);
     } catch (e) {
       debugPrint('Error picking image: $e');
-      return null;
+      return (null, 'Could not access photo library: ${e.toString()}');
     }
   }
 
@@ -104,19 +110,21 @@ class ImageService {
   }
 
   /// Capture and compress image in one call
-  Future<File?> captureAndCompress() async {
-    final file = await captureFromCamera();
-    if (file == null) return null;
+  Future<(File?, String?)> captureAndCompress() async {
+    final (file, error) = await captureFromCamera();
+    if (file == null) return (null, error);
 
-    return await compressImage(file);
+    final compressed = await compressImage(file);
+    return (compressed, null);
   }
 
   /// Pick and compress image in one call
-  Future<File?> pickAndCompress() async {
-    final file = await pickFromGallery();
-    if (file == null) return null;
+  Future<(File?, String?)> pickAndCompress() async {
+    final (file, error) = await pickFromGallery();
+    if (file == null) return (null, error);
 
-    return await compressImage(file);
+    final compressed = await compressImage(file);
+    return (compressed, null);
   }
 }
 

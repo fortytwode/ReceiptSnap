@@ -1,10 +1,16 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../services/router_service.dart';
+import '../services/services.dart';
+import '../theme/app_theme.dart';
+import '../../features/receipts/providers/receipts_provider.dart';
 
 /// Main scaffold with bottom navigation and FAB
-class MainScaffold extends StatefulWidget {
+class MainScaffold extends ConsumerStatefulWidget {
   final Widget child;
 
   const MainScaffold({
@@ -13,10 +19,12 @@ class MainScaffold extends StatefulWidget {
   });
 
   @override
-  State<MainScaffold> createState() => _MainScaffoldState();
+  ConsumerState<MainScaffold> createState() => _MainScaffoldState();
 }
 
-class _MainScaffoldState extends State<MainScaffold> {
+class _MainScaffoldState extends ConsumerState<MainScaffold> {
+  bool _isProcessing = false;
+
   int _calculateSelectedIndex(BuildContext context) {
     final location = GoRouterState.of(context).matchedLocation;
     if (location.startsWith(AppRoutes.receipts)) return 0;
@@ -39,13 +47,170 @@ class _MainScaffoldState extends State<MainScaffold> {
     }
   }
 
+  void _showCaptureOptions() {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                'Add Receipt',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('Take Photo'),
+              subtitle: const Text('Capture with camera'),
+              onTap: () {
+                Navigator.pop(context);
+                _captureFromCamera();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Choose from Gallery'),
+              subtitle: const Text('Select existing photo'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickFromGallery();
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _captureFromCamera() async {
+    setState(() => _isProcessing = true);
+
+    final imageService = ref.read(imageServiceProvider);
+    final (file, error) = await imageService.captureFromCamera();
+
+    if (!mounted) return;
+
+    if (error != null) {
+      setState(() => _isProcessing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    if (file != null) {
+      await _processImage(file);
+    } else {
+      setState(() => _isProcessing = false);
+    }
+  }
+
+  Future<void> _pickFromGallery() async {
+    setState(() => _isProcessing = true);
+
+    final imageService = ref.read(imageServiceProvider);
+    final (file, error) = await imageService.pickFromGallery();
+
+    if (!mounted) return;
+
+    if (error != null) {
+      setState(() => _isProcessing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    if (file != null) {
+      await _processImage(file);
+    } else {
+      setState(() => _isProcessing = false);
+    }
+  }
+
+  Future<void> _processImage(File file) async {
+    // Compress the image
+    final imageService = ref.read(imageServiceProvider);
+    final compressed = await imageService.compressImage(file);
+
+    if (!mounted) return;
+
+    // Upload and process
+    final receipt = await ref
+        .read(uploadReceiptProvider.notifier)
+        .uploadReceipt(compressed ?? file);
+
+    if (!mounted) return;
+
+    setState(() => _isProcessing = false);
+
+    // Refresh receipts list
+    ref.read(receiptsProvider.notifier).refresh();
+
+    if (receipt != null) {
+      // Navigate to receipt detail
+      context.push('/receipt/${receipt.id}');
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            ref.read(uploadReceiptProvider).error ?? 'Failed to upload receipt',
+          ),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final selectedIndex = _calculateSelectedIndex(context);
     final showFab = selectedIndex == 0 || selectedIndex == 1;
+    final uploadState = ref.watch(uploadReceiptProvider);
 
     return Scaffold(
-      body: widget.child,
+      body: Stack(
+        children: [
+          widget.child,
+          // Loading overlay
+          if (_isProcessing || uploadState.isUploading || uploadState.isProcessing)
+            Container(
+              color: Colors.black54,
+              child: Center(
+                child: Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const CircularProgressIndicator(),
+                        const SizedBox(height: 16),
+                        Text(
+                          uploadState.isProcessing
+                              ? uploadState.statusMessage
+                              : 'Processing...',
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: selectedIndex,
         onTap: (index) => _onItemTapped(context, index),
@@ -69,8 +234,8 @@ class _MainScaffoldState extends State<MainScaffold> {
       ),
       floatingActionButton: showFab
           ? FloatingActionButton(
-              onPressed: () => context.push(AppRoutes.capture),
-              child: const Icon(Icons.camera_alt),
+              onPressed: _showCaptureOptions,
+              child: const Icon(Icons.add),
             )
           : null,
     );

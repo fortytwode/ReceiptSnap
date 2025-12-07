@@ -33,15 +33,22 @@ class _CaptureReceiptScreenState extends ConsumerState<CaptureReceiptScreen> {
     });
 
     final imageService = ref.read(imageServiceProvider);
-    final file = await imageService.captureFromCamera();
+    final (file, error) = await imageService.captureFromCamera();
 
     if (!mounted) return;
 
-    if (file == null) {
-      // User cancelled or permission denied or simulator
+    if (error != null) {
       setState(() {
         _isCapturing = false;
-        _errorMessage = 'Camera not available. Try picking from gallery instead.';
+        _errorMessage = error;
+      });
+      return;
+    }
+
+    if (file == null) {
+      // User cancelled
+      setState(() {
+        _isCapturing = false;
       });
       return;
     }
@@ -59,9 +66,17 @@ class _CaptureReceiptScreenState extends ConsumerState<CaptureReceiptScreen> {
     });
 
     final imageService = ref.read(imageServiceProvider);
-    final file = await imageService.pickFromGallery();
+    final (file, error) = await imageService.pickFromGallery();
 
     if (!mounted) return;
+
+    if (error != null) {
+      setState(() {
+        _isCapturing = false;
+        _errorMessage = error;
+      });
+      return;
+    }
 
     if (file == null) {
       setState(() {
