@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../common/models/models.dart';
+import '../../../common/services/services.dart';
 import '../../../common/theme/app_theme.dart';
 import '../../../common/widgets/widgets.dart';
 import '../providers/reports_provider.dart';
@@ -29,8 +30,49 @@ class _ReportDetailScreenState extends ConsumerState<ReportDetailScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Submit Report'),
-        content: const Text(
-          'Are you sure you want to submit this report? You won\'t be able to edit it after submission.',
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Ready to finalize this expense report?',
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.download, size: 16, color: Theme.of(context).colorScheme.primary),
+                      const SizedBox(width: 8),
+                      const Expanded(child: Text('Export as CSV from Account tab')),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(Icons.share, size: 16, color: Theme.of(context).colorScheme.primary),
+                      const SizedBox(width: 8),
+                      const Expanded(child: Text('Share with your manager via email')),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Once submitted, you won\'t be able to edit this report.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -173,45 +215,7 @@ class _ReportDetailScreenState extends ConsumerState<ReportDetailScreen> {
                   const Divider(height: 24),
 
                   // Totals
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Total',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurface.withOpacity(0.6),
-                            ),
-                          ),
-                          Text(
-                            report.formattedTotal,
-                            style: theme.textTheme.headlineMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            'Receipts',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurface.withOpacity(0.6),
-                            ),
-                          ),
-                          Text(
-                            '${report.receiptCount}',
-                            style: theme.textTheme.headlineMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                  _buildTotalsSection(report, theme),
                 ],
               ),
             ),
@@ -361,6 +365,80 @@ class _ReportDetailScreenState extends ConsumerState<ReportDetailScreen> {
       return 'Until ${format.format(report.endDate!)}';
     }
     return '';
+  }
+
+  Widget _buildTotalsSection(Report report, ThemeData theme) {
+    final currencyService = ref.read(currencyServiceProvider);
+    final storage = ref.read(storageServiceProvider);
+    final baseCurrency = storage.defaultCurrency;
+    final hasMultipleCurrencies = report.totalsByCurrency.length > 1;
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Total',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurface.withOpacity(0.6),
+                ),
+              ),
+              Text(
+                report.formattedTotal,
+                style: theme.textTheme.headlineMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              // Show converted total if multiple currencies
+              if (hasMultipleCurrencies) ...[
+                const SizedBox(height: 4),
+                Text(
+                  report.formattedTotalBreakdown,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurface.withOpacity(0.6),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    'Approx. ${currencyService.formatConvertedTotal(report.totalsByCurrency, baseCurrency)}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onPrimaryContainer,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              'Receipts',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurface.withOpacity(0.6),
+              ),
+            ),
+            Text(
+              '${report.receiptCount}',
+              style: theme.textTheme.headlineMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
   }
 }
 

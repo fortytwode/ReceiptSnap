@@ -151,13 +151,10 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                   CircleAvatar(
                     radius: 32,
                     backgroundColor: theme.colorScheme.primary,
-                    child: Text(
-                      _getInitials(authState.user?.name ?? 'User'),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    child: Icon(
+                      authState.isAuthenticated ? Icons.person : Icons.receipt_long,
+                      color: Colors.white,
+                      size: 32,
                     ),
                   ),
                   const SizedBox(width: 16),
@@ -166,17 +163,27 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          authState.user?.name ?? 'Demo User',
+                          authState.user?.name ?? 'ReceiptSnap',
                           style: theme.textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.w600,
                           ),
                         ),
                         const SizedBox(height: 4),
-                        Text(
-                          authState.user?.email ?? 'Anonymous session',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.onSurface.withOpacity(0.6),
-                          ),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.smartphone,
+                              size: 14,
+                              color: theme.colorScheme.onSurface.withOpacity(0.5),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              authState.user?.email ?? 'Data stored on this device',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: theme.colorScheme.onSurface.withOpacity(0.6),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),

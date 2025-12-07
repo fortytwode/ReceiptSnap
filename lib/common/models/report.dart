@@ -143,9 +143,59 @@ class Report extends Equatable {
     );
   }
 
+  /// Calculate total dynamically from receipts, grouped by currency
+  Map<String, double> get totalsByCurrency {
+    final totals = <String, double>{};
+    for (final receipt in receipts) {
+      if (receipt.amount != null && receipt.amount! > 0) {
+        final curr = receipt.currency ?? 'USD';
+        totals[curr] = (totals[curr] ?? 0) + receipt.amount!;
+      }
+    }
+    return totals;
+  }
+
+  /// Get the calculated total (sum of all receipt amounts, regardless of currency)
+  double get calculatedTotal {
+    return receipts.fold<double>(
+      0,
+      (sum, r) => sum + (r.amount ?? 0),
+    );
+  }
+
   String get formattedTotal {
-    final currencySymbol = _getCurrencySymbol(currency);
-    return '$currencySymbol${totalAmount.toStringAsFixed(2)}';
+    final totals = totalsByCurrency;
+
+    // If no receipts with amounts, show zero in report currency
+    if (totals.isEmpty) {
+      final currencySymbol = _getCurrencySymbol(currency);
+      return '$currencySymbol${0.toStringAsFixed(2)}';
+    }
+
+    // If all receipts are in the same currency, show that
+    if (totals.length == 1) {
+      final curr = totals.keys.first;
+      final amount = totals[curr]!;
+      final currencySymbol = _getCurrencySymbol(curr);
+      return '$currencySymbol${amount.toStringAsFixed(2)}';
+    }
+
+    // Multiple currencies - show the first one with indicator
+    final firstCurrency = totals.keys.first;
+    final firstAmount = totals[firstCurrency]!;
+    final currencySymbol = _getCurrencySymbol(firstCurrency);
+    return '$currencySymbol${firstAmount.toStringAsFixed(2)} +';
+  }
+
+  /// Get formatted breakdown of all currency totals
+  String get formattedTotalBreakdown {
+    final totals = totalsByCurrency;
+    if (totals.isEmpty) return 'No amounts';
+
+    return totals.entries.map((e) {
+      final symbol = _getCurrencySymbol(e.key);
+      return '$symbol${e.value.toStringAsFixed(2)}';
+    }).join(' + ');
   }
 
   String _getCurrencySymbol(String currency) {
@@ -160,8 +210,16 @@ class Report extends Equatable {
         return '\u20B9';
       case 'JPY':
         return '\u00A5';
+      case 'RSD':
+        return 'RSD ';
+      case 'CAD':
+        return 'C\$';
+      case 'AUD':
+        return 'A\$';
+      case 'CHF':
+        return 'CHF ';
       default:
-        return currency;
+        return '$currency ';
     }
   }
 

@@ -37,6 +37,21 @@ class ReportsService {
         results = results.where((r) => r.status == reportStatus).toList();
       }
 
+      // Populate receipts for each report from the receipts that reference it
+      results = results.map((report) {
+        final reportReceipts = ReceiptsService.mockReceipts
+            .where((r) => r.reportId == report.id)
+            .toList();
+        final total = reportReceipts.fold<double>(
+          0,
+          (sum, r) => sum + (r.amount ?? 0),
+        );
+        return report.copyWith(
+          receipts: reportReceipts,
+          totalAmount: total,
+        );
+      }).toList();
+
       results.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return results;
     }
@@ -52,7 +67,19 @@ class ReportsService {
         (r) => r.id == id,
         orElse: () => throw Exception('Report not found'),
       );
-      return report;
+
+      // Populate receipts from the receipts that reference this report
+      final reportReceipts = ReceiptsService.mockReceipts
+          .where((r) => r.reportId == report.id)
+          .toList();
+      final total = reportReceipts.fold<double>(
+        0,
+        (sum, r) => sum + (r.amount ?? 0),
+      );
+      return report.copyWith(
+        receipts: reportReceipts,
+        totalAmount: total,
+      );
     }
 
     final report = await _db.getReport(id);

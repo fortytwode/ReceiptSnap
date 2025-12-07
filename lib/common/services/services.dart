@@ -1,6 +1,7 @@
 export 'api_client.dart';
 export 'api_config.dart';
 export 'auth_service.dart';
+export 'currency_service.dart';
 export 'database_service.dart';
 export 'export_service.dart';
 export 'image_service.dart';

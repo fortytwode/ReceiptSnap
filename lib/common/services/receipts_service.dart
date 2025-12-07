@@ -28,6 +28,7 @@ class ReceiptsService {
   }
 
   /// Get all receipts with optional filters
+  /// By default, hides receipts that are already in a report (unless status='in_report')
   Future<List<Receipt>> getReceipts({
     String? status,
     String? search,
@@ -60,6 +61,9 @@ class ReceiptsService {
             results = results.where((r) => r.reportId != null).toList();
             break;
         }
+      } else {
+        // Default: hide receipts that are already in a report
+        results = results.where((r) => r.reportId == null).toList();
       }
 
       // Filter by search

@@ -1,12 +1,8 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../common/services/services.dart';
-import '../../auth/providers/auth_provider.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
@@ -21,19 +17,22 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
   final List<OnboardingPage> _pages = const [
     OnboardingPage(
-      icon: Icons.receipt_long,
-      title: 'Effortless Reporting',
-      subtitle: 'Turn receipt photos into clean expense reports.',
+      icon: Icons.camera_alt_rounded,
+      title: 'Snap Your Receipts',
+      description:
+          'Take a photo of any receipt and we\'ll automatically extract the important details like merchant, date, and amount.',
     ),
     OnboardingPage(
-      icon: Icons.document_scanner,
-      title: 'Smart Receipt Scanning',
-      subtitle: 'We detect merchant, date, amount & currency for you.',
+      icon: Icons.edit_note_rounded,
+      title: 'Review & Confirm',
+      description:
+          'Check the extracted information, make any corrections, and add notes or categories to organize your expenses.',
     ),
     OnboardingPage(
-      icon: Icons.share,
-      title: 'Share Reports Easily',
-      subtitle: 'Submit to your manager or accountant in one tap.',
+      icon: Icons.folder_copy_rounded,
+      title: 'Build Reports',
+      description:
+          'Receipts are automatically added to your monthly expense report. Submit and export when you\'re ready.',
     ),
   ];
 
@@ -49,16 +48,18 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
       );
+    } else {
+      _completeOnboarding();
     }
+  }
+
+  void _skipOnboarding() {
+    _completeOnboarding();
   }
 
   Future<void> _completeOnboarding() async {
     final storage = ref.read(storageServiceProvider);
     await storage.setOnboardingCompleted(true);
-
-    // Login anonymously
-    await ref.read(authProvider.notifier).loginAnonymous();
-
     if (mounted) {
       context.go(AppRoutes.main);
     }
@@ -69,198 +70,95 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      body: Stack(
-        children: [
-          // Background
-          _buildBackground(),
-
-          // Content
-          SafeArea(
-            child: Column(
-              children: [
-                // Skip button
-                Align(
-                  alignment: Alignment.topRight,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: TextButton(
-                      onPressed: _completeOnboarding,
-                      child: Text(
-                        'Skip',
-                        style: TextStyle(
-                          color: Platform.isIOS
-                              ? Colors.white70
-                              : theme.colorScheme.primary,
-                        ),
-                      ),
-                    ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Skip button
+            Align(
+              alignment: Alignment.topRight,
+              child: TextButton(
+                onPressed: _skipOnboarding,
+                child: Text(
+                  'Skip',
+                  style: TextStyle(
+                    color: theme.colorScheme.onSurface.withOpacity(0.6),
                   ),
                 ),
-
-                // Pages
-                Expanded(
-                  child: PageView.builder(
-                    controller: _pageController,
-                    itemCount: _pages.length,
-                    onPageChanged: (index) {
-                      setState(() => _currentPage = index);
-                    },
-                    itemBuilder: (context, index) {
-                      return _OnboardingPageContent(
-                        page: _pages[index],
-                        isIOS: Platform.isIOS,
-                      );
-                    },
-                  ),
-                ),
-
-                // Page indicators
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: List.generate(
-                      _pages.length,
-                      (index) => _PageIndicator(
-                        isActive: index == _currentPage,
-                        isIOS: Platform.isIOS,
-                      ),
-                    ),
-                  ),
-                ),
-
-                // Buttons
-                Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: _currentPage == _pages.length - 1
-                      ? Column(
-                          children: [
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton(
-                                onPressed: _completeOnboarding,
-                                style: ElevatedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(vertical: 16),
-                                  backgroundColor: Platform.isIOS
-                                      ? Colors.white
-                                      : theme.colorScheme.primary,
-                                  foregroundColor: Platform.isIOS
-                                      ? theme.colorScheme.primary
-                                      : Colors.white,
-                                ),
-                                child: const Text('Get Started'),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            TextButton(
-                              onPressed: () {
-                                // TODO: Implement sign in flow
-                                _completeOnboarding();
-                              },
-                              child: Text(
-                                'Sign In',
-                                style: TextStyle(
-                                  color: Platform.isIOS
-                                      ? Colors.white70
-                                      : theme.colorScheme.primary,
-                                ),
-                              ),
-                            ),
-                          ],
-                        )
-                      : SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: _nextPage,
-                            style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              backgroundColor: Platform.isIOS
-                                  ? Colors.white
-                                  : theme.colorScheme.primary,
-                              foregroundColor: Platform.isIOS
-                                  ? theme.colorScheme.primary
-                                  : Colors.white,
-                            ),
-                            child: const Text('Next'),
-                          ),
-                        ),
-                ),
-              ],
+              ),
             ),
-          ),
-        ],
+
+            // Page content
+            Expanded(
+              child: PageView.builder(
+                controller: _pageController,
+                onPageChanged: (index) {
+                  setState(() => _currentPage = index);
+                },
+                itemCount: _pages.length,
+                itemBuilder: (context, index) {
+                  return _buildPage(_pages[index], theme);
+                },
+              ),
+            ),
+
+            // Page indicators
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(
+                  _pages.length,
+                  (index) => _buildIndicator(index, theme),
+                ),
+              ),
+            ),
+
+            // Next/Get Started button
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _nextPage,
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                  child: Text(
+                    _currentPage == _pages.length - 1
+                        ? 'Get Started'
+                        : 'Next',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildBackground() {
-    if (Platform.isIOS) {
-      // Use Liquid Glass platform view on iOS
-      return const LiquidGlassBackground();
-    } else {
-      // Use gradient on Android
-      return Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Theme.of(context).colorScheme.primary,
-              Theme.of(context).colorScheme.primary.withOpacity(0.6),
-              Theme.of(context).colorScheme.secondary,
-            ],
-          ),
-        ),
-      );
-    }
-  }
-}
-
-class OnboardingPage {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-
-  const OnboardingPage({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-  });
-}
-
-class _OnboardingPageContent extends StatelessWidget {
-  final OnboardingPage page;
-  final bool isIOS;
-
-  const _OnboardingPageContent({
-    required this.page,
-    required this.isIOS,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final textColor = isIOS ? Colors.white : theme.colorScheme.onSurface;
-
+  Widget _buildPage(OnboardingPage page, ThemeData theme) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Icon container
+          // Icon in circle
           Container(
             width: 120,
             height: 120,
             decoration: BoxDecoration(
-              color: isIOS
-                  ? Colors.white.withOpacity(0.2)
-                  : theme.colorScheme.primary.withOpacity(0.1),
+              color: theme.colorScheme.primaryContainer,
               shape: BoxShape.circle,
             ),
             child: Icon(
               page.icon,
-              size: 64,
-              color: isIOS ? Colors.white : theme.colorScheme.primary,
+              size: 60,
+              color: theme.colorScheme.primary,
             ),
           ),
 
@@ -271,18 +169,19 @@ class _OnboardingPageContent extends StatelessWidget {
             page.title,
             style: theme.textTheme.headlineMedium?.copyWith(
               fontWeight: FontWeight.bold,
-              color: textColor,
+              color: theme.colorScheme.onSurface,
             ),
             textAlign: TextAlign.center,
           ),
 
           const SizedBox(height: 16),
 
-          // Subtitle
+          // Description
           Text(
-            page.subtitle,
+            page.description,
             style: theme.textTheme.bodyLarge?.copyWith(
-              color: textColor.withOpacity(0.8),
+              color: theme.colorScheme.onSurface.withOpacity(0.7),
+              height: 1.5,
             ),
             textAlign: TextAlign.center,
           ),
@@ -290,75 +189,33 @@ class _OnboardingPageContent extends StatelessWidget {
       ),
     );
   }
-}
 
-class _PageIndicator extends StatelessWidget {
-  final bool isActive;
-  final bool isIOS;
+  Widget _buildIndicator(int index, ThemeData theme) {
+    final isActive = index == _currentPage;
 
-  const _PageIndicator({
-    required this.isActive,
-    required this.isIOS,
-  });
-
-  @override
-  Widget build(BuildContext context) {
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      margin: const EdgeInsets.symmetric(horizontal: 5),
-      width: isActive ? 28 : 8,
+      duration: const Duration(milliseconds: 200),
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      width: isActive ? 24 : 8,
       height: 8,
       decoration: BoxDecoration(
-        color: isActive ? Colors.white : Colors.white.withOpacity(0.35),
+        color: isActive
+            ? theme.colorScheme.primary
+            : theme.colorScheme.primary.withOpacity(0.2),
         borderRadius: BorderRadius.circular(4),
       ),
     );
   }
 }
 
-/// Liquid Glass background for iOS
-/// Uses a gradient with glass-like appearance
-class LiquidGlassBackground extends StatelessWidget {
-  const LiquidGlassBackground({super.key});
+class OnboardingPage {
+  final IconData icon;
+  final String title;
+  final String description;
 
-  @override
-  Widget build(BuildContext context) {
-    // Beautiful gradient background for onboarding
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF667EEA),
-            Color(0xFF764BA2),
-            Color(0xFFF093FB),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _LiquidGlassPlatformView extends StatelessWidget {
-  const _LiquidGlassPlatformView();
-
-  @override
-  Widget build(BuildContext context) {
-    // Try to render native platform view
-    // If it fails, we catch the error and show nothing (gradient shows through)
-    try {
-      return const UiKitView(
-        viewType: 'liquid_glass_view',
-        creationParamsCodec: StandardMessageCodec(),
-      );
-    } catch (e) {
-      // Platform view not available, show frosted glass effect with ClipRect
-      return Container(
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.1),
-        ),
-      );
-    }
-  }
+  const OnboardingPage({
+    required this.icon,
+    required this.title,
+    required this.description,
+  });
 }
