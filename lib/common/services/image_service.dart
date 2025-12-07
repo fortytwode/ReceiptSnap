@@ -1,0 +1,126 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
+
+/// Service for handling image capture and processing
+class ImageService {
+  final ImagePicker _picker = ImagePicker();
+
+  /// Request camera permission
+  Future<bool> requestCameraPermission() async {
+    final status = await Permission.camera.request();
+    return status.isGranted;
+  }
+
+  /// Request photo library permission
+  Future<bool> requestPhotoLibraryPermission() async {
+    final status = await Permission.photos.request();
+    return status.isGranted || status.isLimited;
+  }
+
+  /// Check if camera permission is granted
+  Future<bool> hasCameraPermission() async {
+    return await Permission.camera.isGranted;
+  }
+
+  /// Check if photo library permission is granted
+  Future<bool> hasPhotoLibraryPermission() async {
+    final status = await Permission.photos.status;
+    return status.isGranted || status.isLimited;
+  }
+
+  /// Capture image from camera
+  Future<File?> captureFromCamera() async {
+    try {
+      final hasPermission = await requestCameraPermission();
+      if (!hasPermission) {
+        return null;
+      }
+
+      final XFile? image = await _picker.pickImage(
+        source: ImageSource.camera,
+        preferredCameraDevice: CameraDevice.rear,
+        imageQuality: 90,
+      );
+
+      if (image == null) return null;
+
+      return File(image.path);
+    } catch (e) {
+      debugPrint('Error capturing image: $e');
+      return null;
+    }
+  }
+
+  /// Pick image from gallery
+  Future<File?> pickFromGallery() async {
+    try {
+      final hasPermission = await requestPhotoLibraryPermission();
+      if (!hasPermission) {
+        return null;
+      }
+
+      final XFile? image = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 90,
+      );
+
+      if (image == null) return null;
+
+      return File(image.path);
+    } catch (e) {
+      debugPrint('Error picking image: $e');
+      return null;
+    }
+  }
+
+  /// Compress image for upload
+  Future<File?> compressImage(File file) async {
+    try {
+      final filePath = file.absolute.path;
+      final lastIndex = filePath.lastIndexOf(RegExp(r'.jp'));
+      final targetPath =
+          '${filePath.substring(0, lastIndex)}_compressed.jpg';
+
+      final result = await FlutterImageCompress.compressAndGetFile(
+        file.absolute.path,
+        targetPath,
+        quality: 80,
+        minWidth: 1024,
+        minHeight: 1024,
+      );
+
+      if (result == null) return file;
+
+      return File(result.path);
+    } catch (e) {
+      debugPrint('Error compressing image: $e');
+      return file;
+    }
+  }
+
+  /// Capture and compress image in one call
+  Future<File?> captureAndCompress() async {
+    final file = await captureFromCamera();
+    if (file == null) return null;
+
+    return await compressImage(file);
+  }
+
+  /// Pick and compress image in one call
+  Future<File?> pickAndCompress() async {
+    final file = await pickFromGallery();
+    if (file == null) return null;
+
+    return await compressImage(file);
+  }
+}
+
+/// Provider for ImageService
+final imageServiceProvider = Provider<ImageService>((ref) {
+  return ImageService();
+});
