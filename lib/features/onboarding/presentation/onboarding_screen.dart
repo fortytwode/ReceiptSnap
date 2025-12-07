@@ -303,26 +303,14 @@ class _PageIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final activeColor = Colors.white;
-    final inactiveColor = Colors.white.withOpacity(0.4);
-
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
-      margin: const EdgeInsets.symmetric(horizontal: 6),
-      width: isActive ? 32 : 10,
-      height: 10,
+      margin: const EdgeInsets.symmetric(horizontal: 5),
+      width: isActive ? 28 : 8,
+      height: 8,
       decoration: BoxDecoration(
-        color: isActive ? activeColor : inactiveColor,
-        borderRadius: BorderRadius.circular(5),
-        boxShadow: isActive
-            ? [
-                BoxShadow(
-                  color: Colors.white.withOpacity(0.5),
-                  blurRadius: 8,
-                  spreadRadius: 1,
-                ),
-              ]
-            : null,
+        color: isActive ? Colors.white : Colors.white.withOpacity(0.35),
+        borderRadius: BorderRadius.circular(4),
       ),
     );
   }
