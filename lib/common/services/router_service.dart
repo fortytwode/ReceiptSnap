@@ -84,6 +84,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         },
       ),
 
+      // Create report - MUST come before report/:id to avoid matching "create" as an ID
+      GoRoute(
+        path: AppRoutes.createReport,
+        builder: (context, state) => const CreateReportScreen(),
+      ),
+
       // Report detail
       GoRoute(
         path: AppRoutes.reportDetail,
@@ -91,12 +97,6 @@ final routerProvider = Provider<GoRouter>((ref) {
           final id = state.pathParameters['id']!;
           return ReportDetailScreen(reportId: id);
         },
-      ),
-
-      // Create report
-      GoRoute(
-        path: AppRoutes.createReport,
-        builder: (context, state) => const CreateReportScreen(),
       ),
 
       // Capture receipt

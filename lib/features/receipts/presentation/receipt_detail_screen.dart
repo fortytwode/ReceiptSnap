@@ -56,7 +56,10 @@ class _ReceiptDetailScreenState extends ConsumerState<ReceiptDetailScreen> {
     if (_receipt?.id != receipt.id) {
       _receipt = receipt;
       _merchantController.text = receipt.merchant ?? '';
-      _amountController.text = receipt.amount?.toString() ?? '';
+      // Only show amount if it's set (not null and not zero from old OCR)
+      _amountController.text = (receipt.amount != null && receipt.amount! > 0)
+          ? receipt.amount!.toString()
+          : '';
       _noteController.text = receipt.note ?? '';
       _selectedDate = receipt.date;
       _selectedCurrency = receipt.currency ?? 'USD';

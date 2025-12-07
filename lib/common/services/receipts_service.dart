@@ -131,14 +131,15 @@ class ReceiptsService {
     // Simulate OCR processing - in production this would call the backend
     await Future.delayed(const Duration(seconds: 2));
 
-    // Simulated extracted data
+    // Simulated extracted data - amount is null since we don't have real OCR yet
+    // User will need to enter the amount manually
     final updated = Receipt(
       id: id,
       imageUrl: (await getReceipt(id)).imageUrl,
       merchant: 'Scanned Merchant',
       date: DateTime.now(),
-      amount: 0.00, // User will enter
-      currency: 'USD',
+      amount: null, // Set to null - user must enter manually
+      currency: null, // Set to null - user must select
       category: 'Other',
       ocrStatus: OcrStatus.needsConfirmation,
       reportId: null,

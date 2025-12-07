@@ -131,7 +131,7 @@ class Receipt extends Equatable {
   bool get isInReport => reportId != null;
 
   String get formattedAmount {
-    if (amount == null) return '-';
+    if (amount == null || amount == 0) return 'Enter amount';
     final currencySymbol = _getCurrencySymbol(currency ?? 'USD');
     return '$currencySymbol${amount!.toStringAsFixed(2)}';
   }
@@ -141,15 +141,43 @@ class Receipt extends Equatable {
       case 'USD':
         return '\$';
       case 'EUR':
-        return '\u20AC';
+        return '\u20AC'; // €
       case 'GBP':
-        return '\u00A3';
+        return '\u00A3'; // £
       case 'INR':
-        return '\u20B9';
+        return '\u20B9'; // ₹
       case 'JPY':
-        return '\u00A5';
+      case 'CNY':
+        return '\u00A5'; // ¥
+      case 'KRW':
+        return '\u20A9'; // ₩
+      case 'RSD':
+        return 'RSD '; // Serbian Dinar (no standard symbol)
+      case 'CAD':
+      case 'AUD':
+      case 'NZD':
+      case 'SGD':
+      case 'HKD':
+      case 'MXN':
+        return '\$'; // Dollar variants
+      case 'BRL':
+        return 'R\$'; // Brazilian Real
+      case 'CHF':
+        return 'CHF '; // Swiss Franc
+      case 'SEK':
+      case 'NOK':
+      case 'DKK':
+        return 'kr '; // Nordic currencies
+      case 'PLN':
+        return 'z\u0142'; // Polish Zloty
+      case 'THB':
+        return '\u0E3F'; // ฿ Thai Baht
+      case 'AED':
+        return 'AED '; // UAE Dirham
+      case 'ZAR':
+        return 'R '; // South African Rand
       default:
-        return currency;
+        return '$currency ';
     }
   }
 

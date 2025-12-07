@@ -91,7 +91,9 @@ class _CreateReportScreenState extends ConsumerState<CreateReportScreen> {
   Future<void> _createReport() async {
     final report = await ref.read(createReportProvider.notifier).createReport();
 
-    if (report != null && mounted) {
+    if (!mounted) return;
+
+    if (report != null) {
       // Refresh reports list
       ref.read(reportsProvider.notifier).refresh();
       // Refresh receipts list (receipts now have reportId)
@@ -103,8 +105,17 @@ class _CreateReportScreenState extends ConsumerState<CreateReportScreen> {
           backgroundColor: AppColors.success,
         ),
       );
-      context.pop();
-      context.push('/report/${report.id}');
+      // Use go instead of pop+push to avoid navigation issues
+      context.go('/report/${report.id}');
+    } else {
+      // Show error if report creation failed
+      final error = ref.read(createReportProvider).error;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error ?? 'Failed to create report'),
+          backgroundColor: AppColors.error,
+        ),
+      );
     }
   }
 

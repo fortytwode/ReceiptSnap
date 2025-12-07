@@ -134,13 +134,28 @@ class MockData {
       ];
 
   static List<String> get currencies => [
-        'USD',
-        'EUR',
-        'GBP',
-        'INR',
-        'JPY',
-        'CAD',
-        'AUD',
-        'CHF',
+        'USD', // US Dollar
+        'EUR', // Euro
+        'GBP', // British Pound
+        'INR', // Indian Rupee
+        'JPY', // Japanese Yen
+        'CAD', // Canadian Dollar
+        'AUD', // Australian Dollar
+        'CHF', // Swiss Franc
+        'RSD', // Serbian Dinar
+        'CNY', // Chinese Yuan
+        'KRW', // South Korean Won
+        'MXN', // Mexican Peso
+        'BRL', // Brazilian Real
+        'SGD', // Singapore Dollar
+        'HKD', // Hong Kong Dollar
+        'NZD', // New Zealand Dollar
+        'SEK', // Swedish Krona
+        'NOK', // Norwegian Krone
+        'DKK', // Danish Krone
+        'PLN', // Polish Zloty
+        'THB', // Thai Baht
+        'AED', // UAE Dirham
+        'ZAR', // South African Rand
       ];
 }
