@@ -1,4 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -49,17 +50,9 @@ class _ReportDetailScreenState extends ConsumerState<ReportDetailScreen> {
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.download, size: 16, color: Theme.of(context).colorScheme.primary),
+                      Icon(Icons.email, size: 16, color: Theme.of(context).colorScheme.primary),
                       const SizedBox(width: 8),
-                      const Expanded(child: Text('Export as CSV from Account tab')),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Icon(Icons.share, size: 16, color: Theme.of(context).colorScheme.primary),
-                      const SizedBox(width: 8),
-                      const Expanded(child: Text('Share with your manager via email')),
+                      const Expanded(child: Text('Share via email with CSV attachment')),
                     ],
                   ),
                 ],
@@ -81,7 +74,7 @@ class _ReportDetailScreenState extends ConsumerState<ReportDetailScreen> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Submit'),
+            child: const Text('Submit & Share'),
           ),
         ],
       ),
@@ -111,6 +104,17 @@ class _ReportDetailScreenState extends ConsumerState<ReportDetailScreen> {
           backgroundColor: AppColors.success,
         ),
       );
+
+      // Open share dialog to send via email
+      if (mounted) {
+        try {
+          final exportService = ref.read(exportServiceProvider);
+          await exportService.shareReportViaEmail(report: report);
+        } catch (e) {
+          // Sharing is optional, don't show error if user cancels
+          debugPrint('Share cancelled or failed: $e');
+        }
+      }
     } else {
       final error = ref.read(submitReportProvider).error;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -122,6 +126,23 @@ class _ReportDetailScreenState extends ConsumerState<ReportDetailScreen> {
     }
   }
 
+  Future<void> _shareReport(Report report) async {
+    try {
+      final exportService = ref.read(exportServiceProvider);
+      await exportService.shareReportViaEmail(report: report);
+    } catch (e) {
+      debugPrint('Share failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to share: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final reportAsync = ref.watch(reportDetailProvider(widget.reportId));
@@ -130,6 +151,18 @@ class _ReportDetailScreenState extends ConsumerState<ReportDetailScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Report Details'),
+        actions: [
+          // Show share button for submitted/approved reports
+          reportAsync.whenOrNull(
+            data: (report) => report.status != ReportStatus.draft
+                ? IconButton(
+                    icon: const Icon(Icons.share),
+                    tooltip: 'Share Report',
+                    onPressed: () => _shareReport(report),
+                  )
+                : null,
+          ),
+        ].whereType<Widget>().toList(),
       ),
       body: reportAsync.when(
         loading: () => const LoadingWidget(message: 'Loading report...'),

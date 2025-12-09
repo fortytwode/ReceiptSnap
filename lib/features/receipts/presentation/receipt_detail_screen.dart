@@ -54,8 +54,12 @@ class _ReceiptDetailScreenState extends ConsumerState<ReceiptDetailScreen> {
   }
 
   void _initializeForm(Receipt receipt) {
-    if (_receipt?.id != receipt.id) {
-      _receipt = receipt;
+    // Always update _receipt to get latest data (including reportId changes)
+    final isNewReceipt = _receipt?.id != receipt.id;
+    _receipt = receipt;
+
+    // Only reset form fields if it's a different receipt (not a refresh of same receipt)
+    if (isNewReceipt) {
       _merchantController.text = receipt.merchant ?? '';
       // Only show amount if it's set (not null and not zero from old OCR)
       _amountController.text = (receipt.amount != null && receipt.amount! > 0)
@@ -87,6 +91,11 @@ class _ReceiptDetailScreenState extends ConsumerState<ReceiptDetailScreen> {
     setState(() => _isLoading = true);
 
     try {
+      // First, add to report to get the report ID
+      final reportsService = ref.read(reportsServiceProvider);
+      final report = await reportsService.getOrCreateActiveReport();
+
+      // Now create the updated receipt WITH the report ID
       final updated = _receipt!.copyWith(
         merchant: _merchantController.text.trim(),
         date: _selectedDate,
@@ -95,18 +104,23 @@ class _ReceiptDetailScreenState extends ConsumerState<ReceiptDetailScreen> {
         category: _selectedCategory,
         note: _noteController.text.trim(),
         ocrStatus: OcrStatus.confirmed,
+        reportId: report.id,  // Link to report from the start
       );
 
+      // Update receipt with all data including reportId
       final receiptsService = ref.read(receiptsServiceProvider);
       await receiptsService.updateReceipt(updated);
 
-      // Auto-add to active report
-      final reportsService = ref.read(reportsServiceProvider);
-      await reportsService.addReceiptToActiveReport(updated.id);
+      // Update the report to include this receipt
+      await reportsService.addReceiptToReport(report.id, updated.id);
 
       // Refresh lists
       ref.read(receiptsProvider.notifier).refresh();
       ref.read(reportsProvider.notifier).refresh();
+
+      // Invalidate providers so they fetch fresh data
+      ref.invalidate(receiptDetailProvider(widget.receiptId));
+      ref.invalidate(reportDetailProvider(report.id));
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

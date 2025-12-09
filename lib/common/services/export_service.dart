@@ -131,6 +131,59 @@ class ExportService {
     );
   }
 
+  /// Share a report via email with optional approver
+  /// Opens the system share sheet with a pre-composed email
+  Future<void> shareReportViaEmail({
+    required Report report,
+    String? recipientEmail,
+  }) async {
+    final dateFormat = DateFormat('MMM d, yyyy');
+
+    // Build email body
+    final body = StringBuffer();
+    body.writeln('Expense Report: ${report.title}');
+    body.writeln('');
+    body.writeln('Summary:');
+    body.writeln('• Total: ${report.formattedTotal}');
+    body.writeln('• Receipts: ${report.receiptCount}');
+    if (report.startDate != null && report.endDate != null) {
+      body.writeln('• Period: ${dateFormat.format(report.startDate!)} - ${dateFormat.format(report.endDate!)}');
+    }
+    body.writeln('• Submitted: ${dateFormat.format(DateTime.now())}');
+    body.writeln('');
+    body.writeln('Receipt Details:');
+    body.writeln('');
+
+    for (int i = 0; i < report.receipts.length; i++) {
+      final receipt = report.receipts[i];
+      body.writeln('${i + 1}. ${receipt.merchant ?? "Unknown"}');
+      body.writeln('   Amount: ${receipt.formattedAmount}');
+      if (receipt.date != null) {
+        body.writeln('   Date: ${dateFormat.format(receipt.date!)}');
+      }
+      if (receipt.category != null) {
+        body.writeln('   Category: ${receipt.category}');
+      }
+      body.writeln('');
+    }
+
+    body.writeln('---');
+    body.writeln('Sent from ReceiptSnap');
+
+    // Export CSV attachment
+    final csv = await exportReportDetailToCsv(report.id);
+    final csvPath = await saveCsvToFile(csv, 'expense_report_${report.id.substring(0, 8)}');
+
+    // Share with email
+    final subject = 'Expense Report: ${report.title}';
+
+    await Share.shareXFiles(
+      [XFile(csvPath)],
+      subject: subject,
+      text: body.toString(),
+    );
+  }
+
   /// Escape CSV special characters
   String _escapeCsv(String value) {
     if (value.contains(',') || value.contains('"') || value.contains('\n')) {

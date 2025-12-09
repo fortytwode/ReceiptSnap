@@ -323,6 +323,32 @@ class ReportsService {
       await _storage.setActiveReportId(null);
     }
   }
+
+  /// Add a receipt to a specific report (used after receipt is already updated with reportId)
+  Future<void> addReceiptToReport(String reportId, String receiptId) async {
+    if (ApiConfig.mockMode) {
+      // The receipt already has reportId set via updateReceipt
+      // Just refresh the report's receipts list from the mock data
+      final reportIndex = _reports.indexWhere((r) => r.id == reportId);
+      if (reportIndex != -1) {
+        final reportReceipts = ReceiptsService.mockReceipts
+            .where((r) => r.reportId == reportId)
+            .toList();
+        final total = reportReceipts.fold<double>(
+          0,
+          (sum, r) => sum + (r.amount ?? 0),
+        );
+        _reports[reportIndex] = _reports[reportIndex].copyWith(
+          receipts: reportReceipts,
+          totalAmount: total,
+        );
+      }
+      return;
+    }
+
+    // For real database, just link the receipt
+    await _db.linkReceiptsToReport([receiptId], reportId);
+  }
 }
 
 /// Provider for ReportsService
