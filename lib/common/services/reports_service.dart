@@ -173,13 +173,17 @@ class ReportsService {
   }
 
   /// Submit a report
-  Future<Report> submitReport(String id) async {
+  /// Optionally updates the report currency before submitting
+  Future<Report> submitReport(String id, {String? currency}) async {
     if (ApiConfig.mockMode) {
       await Future.delayed(const Duration(milliseconds: 300));
 
       final index = _reports.indexWhere((r) => r.id == id);
       if (index != -1) {
-        final updated = _reports[index].copyWith(status: ReportStatus.submitted);
+        final updated = _reports[index].copyWith(
+          status: ReportStatus.submitted,
+          currency: currency ?? _reports[index].currency,
+        );
         _reports[index] = updated;
         return updated;
       }
@@ -189,7 +193,10 @@ class ReportsService {
     final report = await _db.getReport(id);
     if (report == null) throw Exception('Report not found');
 
-    final updated = report.copyWith(status: ReportStatus.submitted);
+    final updated = report.copyWith(
+      status: ReportStatus.submitted,
+      currency: currency ?? report.currency,
+    );
     await _db.updateReport(updated);
     return updated;
   }

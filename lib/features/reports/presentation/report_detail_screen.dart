@@ -27,66 +27,37 @@ class _ReportDetailScreenState extends ConsumerState<ReportDetailScreen> {
   bool _isSubmitting = false;
 
   Future<void> _submitReport() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Submit Report'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Ready to finalize this expense report?',
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.email, size: 16, color: Theme.of(context).colorScheme.primary),
-                      const SizedBox(width: 8),
-                      const Expanded(child: Text('Share via email with CSV attachment')),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Once submitted, you won\'t be able to edit this report.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Submit & Share'),
-          ),
-        ],
-      ),
-    );
+    // Get the default recipient email and currency from storage
+    final storage = ref.read(storageServiceProvider);
+    final defaultEmail = storage.defaultRecipientEmail;
+    final defaultCurrency = storage.defaultCurrency;
 
-    if (confirmed != true) return;
+    // Show the appropriate dialog based on whether we have a default email
+    Map<String, String>? result;
+    if (defaultEmail != null && defaultEmail.isNotEmpty) {
+      // Show dialog with option to use default or change
+      result = await _showDefaultEmailDialog(defaultEmail, defaultCurrency);
+    } else {
+      // Show dialog to enter email for the first time
+      result = await _showFirstTimeEmailDialog(defaultCurrency);
+    }
+
+    // User cancelled
+    if (result == null) return;
+
+    final recipientEmail = result['email']!;
+    final reportCurrency = result['currency']!;
+
+    // Save email as default if it's new or changed
+    if (recipientEmail != defaultEmail) {
+      await storage.setDefaultRecipientEmail(recipientEmail);
+    }
 
     setState(() => _isSubmitting = true);
 
     final report = await ref
         .read(submitReportProvider.notifier)
-        .submitReport(widget.reportId);
+        .submitReport(widget.reportId, currency: reportCurrency);
 
     if (!mounted) return;
 
@@ -109,7 +80,20 @@ class _ReportDetailScreenState extends ConsumerState<ReportDetailScreen> {
       if (mounted) {
         try {
           final exportService = ref.read(exportServiceProvider);
-          await exportService.shareReportViaEmail(report: report);
+          final emailResult = await exportService.shareReportViaEmail(
+            report: report,
+            recipientEmail: recipientEmail,
+          );
+
+          // Show feedback if fallback was used
+          if (emailResult == EmailSendResult.fallbackUsed && mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Email app not configured. Share sheet opened instead.'),
+                duration: Duration(seconds: 3),
+              ),
+            );
+          }
         } catch (e) {
           // Sharing is optional, don't show error if user cancels
           debugPrint('Share cancelled or failed: $e');
@@ -126,10 +110,270 @@ class _ReportDetailScreenState extends ConsumerState<ReportDetailScreen> {
     }
   }
 
+  Future<Map<String, String>?> _showFirstTimeEmailDialog(String defaultCurrency) async {
+    final emailController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    String selectedCurrency = defaultCurrency;
+
+    return showDialog<Map<String, String>>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Submit Report'),
+          content: Form(
+            key: formKey,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Enter the email address of the person who should receive this report:',
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      labelText: 'Recipient Email',
+                      hintText: 'manager@company.com',
+                      prefixIcon: Icon(Icons.email),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter an email address';
+                      }
+                      if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                        return 'Please enter a valid email address';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    value: selectedCurrency,
+                    decoration: const InputDecoration(
+                      labelText: 'Report Currency',
+                      prefixIcon: Icon(Icons.attach_money),
+                      helperText: 'All amounts will be converted to this currency',
+                    ),
+                    items: MockData.currencies
+                        .map((c) => DropdownMenuItem(
+                              value: c,
+                              child: Text(c),
+                            ))
+                        .toList(),
+                    onChanged: (value) {
+                      if (value != null) {
+                        setDialogState(() => selectedCurrency = value);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.info_outline, size: 16, color: Theme.of(context).colorScheme.primary),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Text(
+                            'This email will be saved as your default recipient for future reports.',
+                            style: TextStyle(fontSize: 12),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Once submitted, you won\'t be able to edit this report.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, null),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (formKey.currentState!.validate()) {
+                  Navigator.pop(context, {
+                    'email': emailController.text.trim(),
+                    'currency': selectedCurrency,
+                  });
+                }
+              },
+              child: const Text('Submit & Share'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<Map<String, String>?> _showDefaultEmailDialog(String defaultEmail, String defaultCurrency) async {
+    final emailController = TextEditingController(text: defaultEmail);
+    final formKey = GlobalKey<FormState>();
+    bool useDefault = true;
+    String selectedCurrency = defaultCurrency;
+
+    return showDialog<Map<String, String>>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Submit Report'),
+          content: Form(
+            key: formKey,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Ready to finalize this expense report?'),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.email, size: 16, color: Theme.of(context).colorScheme.primary),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Send to: $defaultEmail',
+                                style: const TextStyle(fontWeight: FontWeight.w500),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  InkWell(
+                    onTap: () {
+                      setDialogState(() {
+                        useDefault = !useDefault;
+                        if (useDefault) {
+                          emailController.text = defaultEmail;
+                        }
+                      });
+                    },
+                    child: Row(
+                      children: [
+                        Icon(
+                          useDefault ? Icons.radio_button_off : Icons.radio_button_checked,
+                          size: 20,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                        const SizedBox(width: 8),
+                        const Text('Send to a different email'),
+                      ],
+                    ),
+                  ),
+                  if (!useDefault) ...[
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: const InputDecoration(
+                        labelText: 'Recipient Email',
+                        prefixIcon: Icon(Icons.email),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter an email address';
+                        }
+                        if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                          return 'Please enter a valid email address';
+                        }
+                        return null;
+                      },
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    value: selectedCurrency,
+                    decoration: const InputDecoration(
+                      labelText: 'Report Currency',
+                      prefixIcon: Icon(Icons.attach_money),
+                      helperText: 'All amounts will be converted to this currency',
+                    ),
+                    items: MockData.currencies
+                        .map((c) => DropdownMenuItem(
+                              value: c,
+                              child: Text(c),
+                            ))
+                        .toList(),
+                    onChanged: (value) {
+                      if (value != null) {
+                        setDialogState(() => selectedCurrency = value);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Once submitted, you won\'t be able to edit this report.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, null),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (useDefault || formKey.currentState!.validate()) {
+                  Navigator.pop(context, {
+                    'email': emailController.text.trim(),
+                    'currency': selectedCurrency,
+                  });
+                }
+              },
+              child: const Text('Submit & Share'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _shareReport(Report report) async {
     try {
       final exportService = ref.read(exportServiceProvider);
-      await exportService.shareReportViaEmail(report: report);
+      final result = await exportService.shareReportViaEmail(report: report);
+
+      if (result == EmailSendResult.fallbackUsed && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Email app not configured. Share sheet opened instead.'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
     } catch (e) {
       debugPrint('Share failed: $e');
       if (mounted) {
@@ -283,6 +527,8 @@ class _ReportDetailScreenState extends ConsumerState<ReportDetailScreen> {
             ...report.receipts.map((receipt) => _ReceiptTile(
                   receipt: receipt,
                   onTap: () => context.push('/receipt/${receipt.id}'),
+                  reportCurrency: report.currency,
+                  currencyService: ref.read(currencyServiceProvider),
                 )),
 
           const SizedBox(height: 24),
@@ -478,16 +724,24 @@ class _ReportDetailScreenState extends ConsumerState<ReportDetailScreen> {
 class _ReceiptTile extends StatelessWidget {
   final Receipt receipt;
   final VoidCallback onTap;
+  final String reportCurrency;
+  final CurrencyService currencyService;
 
   const _ReceiptTile({
     required this.receipt,
     required this.onTap,
+    required this.reportCurrency,
+    required this.currencyService,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final dateFormat = DateFormat.yMMMd();
+
+    // Check if receipt currency differs from report currency
+    final receiptCurrency = receipt.currency ?? 'USD';
+    final needsConversion = receiptCurrency != reportCurrency && receipt.amount != null;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -504,14 +758,17 @@ class _ReceiptTile extends StatelessWidget {
                 child: SizedBox(
                   width: 40,
                   height: 50,
-                  child: receipt.imageUrl.startsWith('http')
+                  child: receipt.imageUrl.isNotEmpty && receipt.imageUrl.startsWith('http')
                       ? CachedNetworkImage(
                           imageUrl: receipt.imageUrl,
                           fit: BoxFit.cover,
                         )
                       : Container(
                           color: theme.colorScheme.surfaceContainerHighest,
-                          child: const Icon(Icons.receipt, size: 20),
+                          child: Icon(
+                            receipt.imageUrl.isEmpty ? Icons.edit_note : Icons.receipt,
+                            size: 20,
+                          ),
                         ),
                 ),
               ),
@@ -541,12 +798,31 @@ class _ReceiptTile extends StatelessWidget {
                 ),
               ),
 
-              // Amount
-              Text(
-                receipt.formattedAmount,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+              // Amount with optional conversion
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    receipt.formattedAmount,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  if (needsConversion) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      currencyService.formatConversion(
+                        amount: receipt.amount!,
+                        from: receiptCurrency,
+                        to: reportCurrency,
+                      ),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.primary,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ],
               ),
 
               const SizedBox(width: 8),

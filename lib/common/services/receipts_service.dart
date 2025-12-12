@@ -267,6 +267,39 @@ class ReceiptsService {
 
     return await _db.getAvailableReceipts();
   }
+
+  /// Create a manual receipt entry (for cash expenses without a receipt image)
+  Future<Receipt> createManualEntry({
+    required String merchant,
+    required double amount,
+    required String currency,
+    required DateTime date,
+    String? category,
+    String? note,
+  }) async {
+    final newReceipt = Receipt(
+      id: const Uuid().v4(),
+      imageUrl: '', // No image for manual entries
+      merchant: merchant,
+      date: date,
+      amount: amount,
+      currency: currency,
+      category: category ?? 'Other',
+      note: note,
+      ocrStatus: OcrStatus.confirmed, // Manual entries are already confirmed
+      reportId: null,
+      createdAt: DateTime.now(),
+    );
+
+    if (ApiConfig.mockMode) {
+      await Future.delayed(const Duration(milliseconds: 300));
+      mockReceipts.insert(0, newReceipt);
+      return newReceipt;
+    }
+
+    await _db.insertReceipt(newReceipt);
+    return newReceipt;
+  }
 }
 
 /// Provider for ReceiptsService

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../features/account/presentation/account_screen.dart';
 import '../../features/onboarding/presentation/onboarding_screen.dart';
 import '../../features/receipts/presentation/capture_receipt_screen.dart';
+import '../../features/receipts/presentation/manual_entry_screen.dart';
 import '../../features/receipts/presentation/receipt_detail_screen.dart';
 import '../../features/receipts/presentation/receipts_list_screen.dart';
 import '../../features/reports/presentation/create_report_screen.dart';
@@ -24,6 +25,7 @@ class AppRoutes {
   static const String reportDetail = '/report/:id';
   static const String createReport = '/report/create';
   static const String capture = '/capture';
+  static const String manualEntry = '/manual-entry';
 }
 
 /// Router provider
@@ -103,6 +105,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.capture,
         builder: (context, state) => const CaptureReceiptScreen(),
+      ),
+
+      // Manual entry (for cash expenses without receipt)
+      GoRoute(
+        path: AppRoutes.manualEntry,
+        builder: (context, state) => const ManualEntryScreen(),
       ),
     ],
   );

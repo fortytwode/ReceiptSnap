@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../common/services/router_service.dart';
 import '../../../common/services/services.dart';
 import '../../../common/theme/app_theme.dart';
 import '../providers/receipts_provider.dart';
@@ -250,6 +251,37 @@ class _CaptureReceiptScreenState extends ConsumerState<CaptureReceiptScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
                 ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // Manual entry button
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    context.pop();
+                    context.push(AppRoutes.manualEntry);
+                  },
+                  icon: const Icon(Icons.edit_note),
+                  label: const Text('Manual Entry'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white70,
+                    side: const BorderSide(color: Colors.white30),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 8),
+
+              Text(
+                'For cash expenses without a receipt',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.5),
+                  fontSize: 12,
+                ),
+                textAlign: TextAlign.center,
               ),
             ],
           ),

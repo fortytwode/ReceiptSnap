@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter_email_sender/flutter_email_sender.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
@@ -7,6 +8,13 @@ import 'package:share_plus/share_plus.dart';
 
 import '../models/models.dart';
 import 'database_service.dart';
+
+/// Result of email sending attempt
+enum EmailSendResult {
+  success,
+  fallbackUsed,
+  failed,
+}
 
 /// Service for exporting data to CSV
 class ExportService {
@@ -132,8 +140,9 @@ class ExportService {
   }
 
   /// Share a report via email with optional approver
-  /// Opens the system share sheet with a pre-composed email
-  Future<void> shareReportViaEmail({
+  /// Uses flutter_email_sender to open native email composer with pre-filled recipient
+  /// Falls back to share sheet if email app is not available
+  Future<EmailSendResult> shareReportViaEmail({
     required Report report,
     String? recipientEmail,
   }) async {
@@ -174,14 +183,35 @@ class ExportService {
     final csv = await exportReportDetailToCsv(report.id);
     final csvPath = await saveCsvToFile(csv, 'expense_report_${report.id.substring(0, 8)}');
 
-    // Share with email
     final subject = 'Expense Report: ${report.title}';
 
-    await Share.shareXFiles(
-      [XFile(csvPath)],
-      subject: subject,
-      text: body.toString(),
-    );
+    // Try flutter_email_sender first (opens native email app with pre-filled recipient)
+    try {
+      final email = Email(
+        body: body.toString(),
+        subject: subject,
+        recipients: recipientEmail != null ? [recipientEmail] : [],
+        attachmentPaths: [csvPath],
+        isHTML: false,
+      );
+
+      await FlutterEmailSender.send(email);
+      return EmailSendResult.success;
+    } catch (e) {
+      // Email app not available or not configured - fall back to share sheet
+      // This happens when iOS Mail app is not set up, or no email apps installed
+      try {
+        await Share.shareXFiles(
+          [XFile(csvPath)],
+          subject: subject,
+          text: body.toString(),
+        );
+        return EmailSendResult.fallbackUsed;
+      } catch (shareError) {
+        // Both methods failed
+        rethrow;
+      }
+    }
   }
 
   /// Escape CSV special characters

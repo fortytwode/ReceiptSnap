@@ -239,11 +239,11 @@ class SubmitReportNotifier extends StateNotifier<SubmitReportState> {
 
   SubmitReportNotifier(this._service) : super(const SubmitReportState());
 
-  Future<Report?> submitReport(String id) async {
+  Future<Report?> submitReport(String id, {String? currency}) async {
     state = const SubmitReportState(isSubmitting: true);
 
     try {
-      final report = await _service.submitReport(id);
+      final report = await _service.submitReport(id, currency: currency);
       // Clear active report so a new one is created next time
       await _service.onReportSubmitted(id);
       state = SubmitReportState(submittedReport: report);
