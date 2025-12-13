@@ -51,7 +51,7 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
   void _showCaptureOptions() {
     showModalBottomSheet(
       context: context,
-      builder: (context) => SafeArea(
+      builder: (ctx) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -70,7 +70,7 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
               title: const Text('Take Photo'),
               subtitle: const Text('Capture with camera'),
               onTap: () {
-                Navigator.pop(context);
+                Navigator.pop(ctx);
                 _captureFromCamera();
               },
             ),
@@ -79,8 +79,17 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
               title: const Text('Choose from Gallery'),
               subtitle: const Text('Select existing photo'),
               onTap: () {
-                Navigator.pop(context);
+                Navigator.pop(ctx);
                 _pickFromGallery();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.edit_note),
+              title: const Text('Manual Entry'),
+              subtitle: const Text('For cash expenses without a receipt'),
+              onTap: () {
+                Navigator.pop(ctx);
+                context.push(AppRoutes.manualEntry);
               },
             ),
             const SizedBox(height: 8),
