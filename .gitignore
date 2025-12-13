@@ -60,3 +60,4 @@ app.*.map.json
 
 # Coverage
 coverage/
+functions/node_modules/

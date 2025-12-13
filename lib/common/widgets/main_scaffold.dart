@@ -86,7 +86,7 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
             ListTile(
               leading: const Icon(Icons.edit_note),
               title: const Text('Manual Entry'),
-              subtitle: const Text('For cash expenses without a receipt'),
+              subtitle: const Text('Enter expense details manually'),
               onTap: () {
                 Navigator.pop(ctx);
                 context.push(AppRoutes.manualEntry);

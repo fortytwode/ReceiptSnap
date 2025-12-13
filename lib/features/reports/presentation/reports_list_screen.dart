@@ -22,8 +22,6 @@ class _ReportsListScreenState extends ConsumerState<ReportsListScreen> {
     {'value': '', 'label': 'All'},
     {'value': 'draft', 'label': 'Draft'},
     {'value': 'submitted', 'label': 'Submitted'},
-    {'value': 'approved', 'label': 'Approved'},
-    {'value': 'rejected', 'label': 'Rejected'},
   ];
 
   void _onStatusFilter(String status) {

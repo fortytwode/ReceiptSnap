@@ -77,23 +77,41 @@ class _ReportDetailScreenState extends ConsumerState<ReportDetailScreen> {
         ),
       );
 
-      // Open share dialog to send via email
+      // Send email via Firebase (automatic) or fall back to local email composer
       if (mounted) {
         try {
-          final exportService = ref.read(exportServiceProvider);
-          final emailResult = await exportService.shareReportViaEmail(
+          // Try Firebase email first (sends automatically without user interaction)
+          final firebaseEmailService = ref.read(firebaseEmailServiceProvider);
+          final firebaseResult = await firebaseEmailService.sendReport(
             report: report,
             recipientEmail: recipientEmail,
           );
 
-          // Show feedback if fallback was used
-          if (emailResult == EmailSendResult.fallbackUsed && mounted) {
+          if (firebaseResult == FirebaseEmailResult.success && mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Email app not configured. Share sheet opened instead.'),
-                duration: Duration(seconds: 3),
+              SnackBar(
+                content: Text('Report sent to $recipientEmail'),
+                backgroundColor: AppColors.success,
               ),
             );
+          } else {
+            // Firebase not configured or failed - fall back to local email composer
+            debugPrint('Firebase email not available, using local email composer');
+            final exportService = ref.read(exportServiceProvider);
+            final emailResult = await exportService.shareReportViaEmail(
+              report: report,
+              recipientEmail: recipientEmail,
+            );
+
+            // Show feedback if fallback was used
+            if (emailResult == EmailSendResult.fallbackUsed && mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Email app not configured. Share sheet opened instead.'),
+                  duration: Duration(seconds: 3),
+                ),
+              );
+            }
           }
         } catch (e) {
           // Sharing is optional, don't show error if user cancels

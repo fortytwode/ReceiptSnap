@@ -4,6 +4,7 @@ export 'auth_service.dart';
 export 'currency_service.dart';
 export 'database_service.dart';
 export 'export_service.dart';
+export 'firebase_email_service.dart';
 export 'image_service.dart';
 export 'mock_data.dart';
 export 'ocr_service.dart';
