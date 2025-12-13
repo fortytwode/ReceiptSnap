@@ -19,6 +19,18 @@ class ReceiptsService {
 
   ReceiptsService(this._api, this._db, this._ocr);
 
+  /// Get IDs of submitted reports (to filter out their receipts from home screen)
+  Future<Set<String>> _getSubmittedReportIds() async {
+    if (ApiConfig.mockMode) {
+      // In mock mode, check MockData reports
+      return MockData.mockReports
+          .where((r) => r.status != ReportStatus.draft)
+          .map((r) => r.id)
+          .toSet();
+    }
+    return await _db.getSubmittedReportIds();
+  }
+
   // In-memory mock storage - only used when mockMode = true
   static List<Receipt>? _mockReceiptsStorage;
 
@@ -28,11 +40,14 @@ class ReceiptsService {
   }
 
   /// Get all receipts with optional filters
-  /// By default, hides receipts that are already in a report (unless status='in_report')
+  /// By default, hides receipts that are in SUBMITTED reports (but shows those in draft reports)
   Future<List<Receipt>> getReceipts({
     String? status,
     String? search,
   }) async {
+    // Get submitted report IDs to filter them out
+    final submittedReportIds = await _getSubmittedReportIds();
+
     if (ApiConfig.mockMode) {
       await Future.delayed(const Duration(milliseconds: 500));
       var results = List<Receipt>.from(mockReceipts);
@@ -58,12 +73,18 @@ class ReceiptsService {
                 .toList();
             break;
           case 'in_report':
-            results = results.where((r) => r.reportId != null).toList();
+            // Show only receipts in DRAFT reports (not submitted)
+            results = results
+                .where((r) => r.reportId != null && !submittedReportIds.contains(r.reportId))
+                .toList();
             break;
         }
       } else {
-        // Default: hide receipts that are already in a report
-        results = results.where((r) => r.reportId == null).toList();
+        // Default: hide receipts that are in SUBMITTED reports
+        // Show: receipts not in any report OR receipts in draft reports
+        results = results
+            .where((r) => r.reportId == null || !submittedReportIds.contains(r.reportId))
+            .toList();
       }
 
       // Filter by search
@@ -82,7 +103,24 @@ class ReceiptsService {
     }
 
     // Use local database
-    return await _db.getReceipts(status: status, search: search);
+    var results = await _db.getReceipts(status: status, search: search);
+
+    // Filter out receipts in submitted reports (unless specifically requesting them)
+    if (status != 'in_submitted_report') {
+      if (status == 'in_report') {
+        // Show only receipts in draft reports
+        results = results
+            .where((r) => r.reportId != null && !submittedReportIds.contains(r.reportId))
+            .toList();
+      } else if (status == null || status.isEmpty) {
+        // Default: hide receipts in submitted reports
+        results = results
+            .where((r) => r.reportId == null || !submittedReportIds.contains(r.reportId))
+            .toList();
+      }
+    }
+
+    return results;
   }
 
   /// Get a single receipt by ID
@@ -176,44 +214,162 @@ class ReceiptsService {
     return updated;
   }
 
-  /// Infer category from merchant name
+  /// Infer category from merchant name using common patterns
   String _inferCategory(String? merchant) {
-    if (merchant == null) return 'Other';
+    if (merchant == null || merchant.isEmpty) return 'Other';
     final lower = merchant.toLowerCase();
 
-    // Common category mappings
+    // Lodging - Hotels, Airbnb, etc.
     if (lower.contains('hotel') ||
         lower.contains('inn') ||
         lower.contains('lodge') ||
+        lower.contains('motel') ||
         lower.contains('airbnb') ||
-        lower.contains('smeštaj')) {
+        lower.contains('vrbo') ||
+        lower.contains('marriott') ||
+        lower.contains('hilton') ||
+        lower.contains('hyatt') ||
+        lower.contains('sheraton') ||
+        lower.contains('westin') ||
+        lower.contains('holiday inn') ||
+        lower.contains('best western') ||
+        lower.contains('radisson') ||
+        lower.contains('smeštaj') ||
+        lower.contains('hostel')) {
       return 'Lodging';
     }
+
+    // Transportation - Rideshare, Taxi, Parking, Gas
     if (lower.contains('uber') ||
         lower.contains('lyft') ||
         lower.contains('taxi') ||
-        lower.contains('bolt')) {
+        lower.contains('cab') ||
+        lower.contains('bolt') ||
+        lower.contains('grab') ||
+        lower.contains('parking') ||
+        lower.contains('garage') ||
+        lower.contains('gas') ||
+        lower.contains('shell') ||
+        lower.contains('exxon') ||
+        lower.contains('chevron') ||
+        lower.contains('bp') ||
+        lower.contains('mobil') ||
+        lower.contains('petrol') ||
+        lower.contains('fuel') ||
+        lower.contains('metro') ||
+        lower.contains('subway') ||
+        lower.contains('transit') ||
+        lower.contains('bus') ||
+        lower.contains('train') ||
+        lower.contains('rail')) {
       return 'Transportation';
     }
+
+    // Travel - Airlines, etc.
     if (lower.contains('airline') ||
+        lower.contains('airways') ||
         lower.contains('flight') ||
         lower.contains('delta') ||
         lower.contains('united') ||
-        lower.contains('american')) {
+        lower.contains('american') ||
+        lower.contains('southwest') ||
+        lower.contains('jetblue') ||
+        lower.contains('spirit') ||
+        lower.contains('frontier') ||
+        lower.contains('alaska') ||
+        lower.contains('lufthansa') ||
+        lower.contains('british') ||
+        lower.contains('air france') ||
+        lower.contains('emirates') ||
+        lower.contains('qatar') ||
+        lower.contains('expedia') ||
+        lower.contains('booking') ||
+        lower.contains('kayak') ||
+        lower.contains('airport')) {
       return 'Travel';
     }
+
+    // Food & Drink - Restaurants, Coffee, Fast food
     if (lower.contains('starbucks') ||
         lower.contains('coffee') ||
         lower.contains('cafe') ||
+        lower.contains('café') ||
         lower.contains('restaurant') ||
         lower.contains('food') ||
-        lower.contains('doručak')) {
+        lower.contains('grill') ||
+        lower.contains('kitchen') ||
+        lower.contains('diner') ||
+        lower.contains('bistro') ||
+        lower.contains('bar') ||
+        lower.contains('pub') ||
+        lower.contains('mcdonald') ||
+        lower.contains('burger') ||
+        lower.contains('pizza') ||
+        lower.contains('subway') ||
+        lower.contains('chipotle') ||
+        lower.contains('taco') ||
+        lower.contains('wendy') ||
+        lower.contains('chick-fil-a') ||
+        lower.contains('kfc') ||
+        lower.contains('popeye') ||
+        lower.contains('dunkin') ||
+        lower.contains('panera') ||
+        lower.contains('bakery') ||
+        lower.contains('doručak') ||
+        lower.contains('ručak') ||
+        lower.contains('večera') ||
+        lower.contains('uber eats') ||
+        lower.contains('doordash') ||
+        lower.contains('grubhub') ||
+        lower.contains('deliveroo')) {
       return 'Food & Drink';
     }
+
+    // Office Supplies
     if (lower.contains('office') ||
         lower.contains('staples') ||
-        lower.contains('depot')) {
+        lower.contains('depot') ||
+        lower.contains('supply') ||
+        lower.contains('paper') ||
+        lower.contains('print') ||
+        lower.contains('fedex') ||
+        lower.contains('ups') ||
+        lower.contains('kinkos')) {
       return 'Office Supplies';
+    }
+
+    // Entertainment
+    if (lower.contains('cinema') ||
+        lower.contains('movie') ||
+        lower.contains('theater') ||
+        lower.contains('theatre') ||
+        lower.contains('concert') ||
+        lower.contains('ticket') ||
+        lower.contains('museum') ||
+        lower.contains('zoo') ||
+        lower.contains('park') ||
+        lower.contains('netflix') ||
+        lower.contains('spotify') ||
+        lower.contains('hulu') ||
+        lower.contains('disney')) {
+      return 'Entertainment';
+    }
+
+    // Utilities
+    if (lower.contains('electric') ||
+        lower.contains('power') ||
+        lower.contains('utility') ||
+        lower.contains('water') ||
+        lower.contains('gas company') ||
+        lower.contains('internet') ||
+        lower.contains('phone') ||
+        lower.contains('mobile') ||
+        lower.contains('verizon') ||
+        lower.contains('at&t') ||
+        lower.contains('t-mobile') ||
+        lower.contains('comcast') ||
+        lower.contains('spectrum')) {
+      return 'Utilities';
     }
 
     return 'Other';

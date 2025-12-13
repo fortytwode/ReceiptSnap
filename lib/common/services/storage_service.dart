@@ -15,6 +15,7 @@ class StorageKeys {
   static const String userName = 'user_name';
   static const String userEmail = 'user_email';
   static const String activeReportId = 'active_report_id';
+  static const String defaultRecipientEmail = 'default_recipient_email';
 }
 
 /// Storage service for persistent data
@@ -69,6 +70,18 @@ class StorageService {
       await _prefs.remove(StorageKeys.activeReportId);
     } else {
       await _prefs.setString(StorageKeys.activeReportId, id);
+    }
+  }
+
+  // Default Recipient Email
+  String? get defaultRecipientEmail =>
+      _prefs.getString(StorageKeys.defaultRecipientEmail);
+
+  Future<void> setDefaultRecipientEmail(String? email) async {
+    if (email == null || email.isEmpty) {
+      await _prefs.remove(StorageKeys.defaultRecipientEmail);
+    } else {
+      await _prefs.setString(StorageKeys.defaultRecipientEmail, email);
     }
   }
 

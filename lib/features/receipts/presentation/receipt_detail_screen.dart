@@ -36,6 +36,7 @@ class _ReceiptDetailScreenState extends ConsumerState<ReceiptDetailScreen> {
   String? _selectedCategory;
   bool _isLoading = false;
   Receipt? _receipt;
+  bool _isReportSubmitted = false;
 
   @override
   void initState() {
@@ -58,6 +59,9 @@ class _ReceiptDetailScreenState extends ConsumerState<ReceiptDetailScreen> {
     final isNewReceipt = _receipt?.id != receipt.id;
     _receipt = receipt;
 
+    // Check if the associated report is submitted
+    _checkReportStatus(receipt);
+
     // Only reset form fields if it's a different receipt (not a refresh of same receipt)
     if (isNewReceipt) {
       _merchantController.text = receipt.merchant ?? '';
@@ -69,6 +73,29 @@ class _ReceiptDetailScreenState extends ConsumerState<ReceiptDetailScreen> {
       _selectedDate = receipt.date;
       _selectedCurrency = receipt.currency ?? 'USD';
       _selectedCategory = receipt.category;
+    }
+  }
+
+  Future<void> _checkReportStatus(Receipt receipt) async {
+    if (receipt.reportId == null) {
+      if (_isReportSubmitted) {
+        setState(() => _isReportSubmitted = false);
+      }
+      return;
+    }
+
+    try {
+      final reportsService = ref.read(reportsServiceProvider);
+      final report = await reportsService.getReport(receipt.reportId!);
+      final isSubmitted = report.status != ReportStatus.draft;
+      if (_isReportSubmitted != isSubmitted) {
+        setState(() => _isReportSubmitted = isSubmitted);
+      }
+    } catch (e) {
+      // If we can't fetch the report, assume it's not submitted
+      if (_isReportSubmitted) {
+        setState(() => _isReportSubmitted = false);
+      }
     }
   }
 
@@ -84,18 +111,14 @@ class _ReceiptDetailScreenState extends ConsumerState<ReceiptDetailScreen> {
     }
   }
 
-  Future<void> _saveReceipt() async {
+  /// Save receipt changes only (without adding to report)
+  Future<void> _saveChangesOnly() async {
     if (!_formKey.currentState!.validate()) return;
     if (_receipt == null) return;
 
     setState(() => _isLoading = true);
 
     try {
-      // First, add to report to get the report ID
-      final reportsService = ref.read(reportsServiceProvider);
-      final report = await reportsService.getOrCreateActiveReport();
-
-      // Now create the updated receipt WITH the report ID
       final updated = _receipt!.copyWith(
         merchant: _merchantController.text.trim(),
         date: _selectedDate,
@@ -104,28 +127,95 @@ class _ReceiptDetailScreenState extends ConsumerState<ReceiptDetailScreen> {
         category: _selectedCategory,
         note: _noteController.text.trim(),
         ocrStatus: OcrStatus.confirmed,
-        reportId: report.id,  // Link to report from the start
       );
 
-      // Update receipt with all data including reportId
       final receiptsService = ref.read(receiptsServiceProvider);
       await receiptsService.updateReceipt(updated);
 
-      // Update the report to include this receipt
-      await reportsService.addReceiptToReport(report.id, updated.id);
-
-      // Refresh lists
       ref.read(receiptsProvider.notifier).refresh();
-      ref.read(reportsProvider.notifier).refresh();
-
-      // Invalidate providers so they fetch fresh data
       ref.invalidate(receiptDetailProvider(widget.receiptId));
-      ref.invalidate(reportDetailProvider(report.id));
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Receipt saved and added to your report!'),
+            content: Text('Changes saved!'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  /// Show dialog to choose which report to add to
+  Future<void> _showAddToReportDialog() async {
+    if (_receipt == null) return;
+
+    // First save any changes
+    if (!_formKey.currentState!.validate()) return;
+
+    final reportsService = ref.read(reportsServiceProvider);
+
+    // Get existing draft reports
+    final reports = await reportsService.getReports(status: 'draft');
+
+    if (!mounted) return;
+
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => _AddToReportDialog(draftReports: reports),
+    );
+
+    if (result == null || !mounted) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      Report targetReport;
+
+      if (result['createNew'] == true) {
+        // Create a new report
+        targetReport = await reportsService.getOrCreateActiveReport();
+      } else {
+        // Use selected existing report
+        targetReport = result['report'] as Report;
+      }
+
+      // Update receipt with report ID and save changes
+      final updated = _receipt!.copyWith(
+        merchant: _merchantController.text.trim(),
+        date: _selectedDate,
+        amount: double.tryParse(_amountController.text),
+        currency: _selectedCurrency,
+        category: _selectedCategory,
+        note: _noteController.text.trim(),
+        ocrStatus: OcrStatus.confirmed,
+        reportId: targetReport.id,
+      );
+
+      final receiptsService = ref.read(receiptsServiceProvider);
+      await receiptsService.updateReceipt(updated);
+      await reportsService.addReceiptToReport(targetReport.id, updated.id);
+
+      ref.read(receiptsProvider.notifier).refresh();
+      ref.read(reportsProvider.notifier).refresh();
+      ref.invalidate(receiptDetailProvider(widget.receiptId));
+      ref.invalidate(reportDetailProvider(targetReport.id));
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Added to "${targetReport.title}"'),
             backgroundColor: AppColors.success,
           ),
         );
@@ -214,7 +304,7 @@ class _ReceiptDetailScreenState extends ConsumerState<ReceiptDetailScreen> {
       appBar: AppBar(
         title: const Text('Receipt Details'),
         actions: [
-          if (_receipt != null && !_receipt!.isInReport)
+          if (_receipt != null && !_isReportSubmitted)
             IconButton(
               icon: const Icon(Icons.delete_outline),
               onPressed: _isLoading ? null : _deleteReceipt,
@@ -300,7 +390,7 @@ class _ReceiptDetailScreenState extends ConsumerState<ReceiptDetailScreen> {
                         labelText: 'Merchant',
                         prefixIcon: Icon(Icons.store),
                       ),
-                      enabled: !receipt.isInReport,
+                      enabled: !_isReportSubmitted,
                       validator: (value) =>
                           value?.isEmpty == true ? 'Please enter merchant name' : null,
                     ),
@@ -309,7 +399,7 @@ class _ReceiptDetailScreenState extends ConsumerState<ReceiptDetailScreen> {
 
                     // Date picker
                     InkWell(
-                      onTap: receipt.isInReport ? null : _selectDate,
+                      onTap: _isReportSubmitted ? null : _selectDate,
                       child: InputDecorator(
                         decoration: const InputDecoration(
                           labelText: 'Date',
@@ -337,7 +427,7 @@ class _ReceiptDetailScreenState extends ConsumerState<ReceiptDetailScreen> {
                               prefixIcon: Icon(Icons.attach_money),
                             ),
                             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                            enabled: !receipt.isInReport,
+                            enabled: !_isReportSubmitted,
                             validator: (value) {
                               if (value?.isEmpty == true) return 'Enter amount';
                               if (double.tryParse(value!) == null) return 'Invalid number';
@@ -358,7 +448,7 @@ class _ReceiptDetailScreenState extends ConsumerState<ReceiptDetailScreen> {
                                       child: Text(c),
                                     ))
                                 .toList(),
-                            onChanged: receipt.isInReport
+                            onChanged: _isReportSubmitted
                                 ? null
                                 : (value) => setState(() => _selectedCurrency = value),
                           ),
@@ -381,7 +471,7 @@ class _ReceiptDetailScreenState extends ConsumerState<ReceiptDetailScreen> {
                                 child: Text(c),
                               ))
                           .toList(),
-                      onChanged: receipt.isInReport
+                      onChanged: _isReportSubmitted
                           ? null
                           : (value) => setState(() => _selectedCategory = value),
                     ),
@@ -397,22 +487,65 @@ class _ReceiptDetailScreenState extends ConsumerState<ReceiptDetailScreen> {
                         alignLabelWithHint: true,
                       ),
                       maxLines: 3,
-                      enabled: !receipt.isInReport,
+                      enabled: !_isReportSubmitted,
                     ),
 
                     const SizedBox(height: 32),
 
-                    // Save button
-                    if (!receipt.isInReport)
+                    // Buttons - show if receipt is not in a submitted report
+                    if (!_isReportSubmitted) ...[
+                      // Save Changes button (always visible)
                       ElevatedButton(
-                        onPressed: _isLoading ? null : _saveReceipt,
+                        onPressed: _isLoading ? null : _saveChangesOnly,
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 16),
                         ),
-                        child: const Text('Confirm & Add to Report'),
+                        child: const Text('Save Changes'),
                       ),
 
-                    if (receipt.isInReport)
+                      // Add to Report button (only if not already in a report)
+                      if (!receipt.isInReport) ...[
+                        const SizedBox(height: 12),
+                        OutlinedButton(
+                          onPressed: _isLoading ? null : _showAddToReportDialog,
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                          child: const Text('Add to Report'),
+                        ),
+                      ],
+
+                      // Show which report this receipt is in
+                      if (receipt.isInReport) ...[
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: AppColors.inReport.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: AppColors.inReport.withOpacity(0.3)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.folder, color: AppColors.inReport, size: 20),
+                              const SizedBox(width: 12),
+                              const Expanded(
+                                child: Text(
+                                  'This receipt is in a draft report',
+                                  style: TextStyle(fontSize: 13),
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: () => context.push('/report/${receipt.reportId}'),
+                                child: const Text('View'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
+
+                    if (_isReportSubmitted)
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
@@ -428,7 +561,7 @@ class _ReceiptDetailScreenState extends ConsumerState<ReceiptDetailScreen> {
                             const SizedBox(width: 12),
                             Expanded(
                               child: Text(
-                                'This receipt is part of a report and cannot be edited.',
+                                'This receipt is part of a submitted report and cannot be edited.',
                                 style: theme.textTheme.bodySmall?.copyWith(
                                   color: theme.colorScheme.onSurface.withOpacity(0.6),
                                 ),
@@ -495,6 +628,152 @@ class _FullScreenImageViewer extends StatelessWidget {
               minScale: PhotoViewComputedScale.contained,
               maxScale: PhotoViewComputedScale.covered * 3,
             ),
+    );
+  }
+}
+
+/// Dialog for choosing which report to add a receipt to
+class _AddToReportDialog extends StatefulWidget {
+  final List<Report> draftReports;
+
+  const _AddToReportDialog({required this.draftReports});
+
+  @override
+  State<_AddToReportDialog> createState() => _AddToReportDialogState();
+}
+
+class _AddToReportDialogState extends State<_AddToReportDialog> {
+  bool _createNew = true;
+  Report? _selectedReport;
+
+  @override
+  void initState() {
+    super.initState();
+    // Default to existing report if there's one available
+    if (widget.draftReports.isNotEmpty) {
+      _createNew = false;
+      _selectedReport = widget.draftReports.first;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return AlertDialog(
+      title: const Text('Add to Report'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Create new report option
+            RadioListTile<bool>(
+              title: const Text('Create new report'),
+              subtitle: const Text('Start a new expense report'),
+              value: true,
+              groupValue: _createNew,
+              onChanged: (value) {
+                setState(() {
+                  _createNew = true;
+                  _selectedReport = null;
+                });
+              },
+              contentPadding: EdgeInsets.zero,
+            ),
+
+            // Existing reports option
+            if (widget.draftReports.isNotEmpty) ...[
+              RadioListTile<bool>(
+                title: const Text('Add to existing report'),
+                value: false,
+                groupValue: _createNew,
+                onChanged: (value) {
+                  setState(() {
+                    _createNew = false;
+                    _selectedReport = widget.draftReports.first;
+                  });
+                },
+                contentPadding: EdgeInsets.zero,
+              ),
+
+              // Report selection dropdown
+              if (!_createNew)
+                Padding(
+                  padding: const EdgeInsets.only(left: 16),
+                  child: Column(
+                    children: widget.draftReports.map((report) {
+                      final isSelected = _selectedReport?.id == report.id;
+                      return InkWell(
+                        onTap: () => setState(() => _selectedReport = report),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                          margin: const EdgeInsets.only(bottom: 4),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? theme.colorScheme.primaryContainer
+                                : theme.colorScheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(8),
+                            border: isSelected
+                                ? Border.all(color: theme.colorScheme.primary)
+                                : null,
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                isSelected ? Icons.check_circle : Icons.folder_outlined,
+                                size: 20,
+                                color: isSelected
+                                    ? theme.colorScheme.primary
+                                    : theme.colorScheme.onSurfaceVariant,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      report.title,
+                                      style: theme.textTheme.bodyMedium?.copyWith(
+                                        fontWeight: isSelected ? FontWeight.w600 : null,
+                                      ),
+                                    ),
+                                    Text(
+                                      '${report.receiptCount} receipts • ${report.formattedTotal}',
+                                      style: theme.textTheme.bodySmall?.copyWith(
+                                        color: theme.colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            if (_createNew) {
+              Navigator.pop(context, {'createNew': true});
+            } else if (_selectedReport != null) {
+              Navigator.pop(context, {'createNew': false, 'report': _selectedReport});
+            }
+          },
+          child: Text(_createNew ? 'Create & Add' : 'Add to Report'),
+        ),
+      ],
     );
   }
 }

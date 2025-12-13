@@ -1,5 +1,7 @@
 PODS:
   - Flutter (1.0.0)
+  - flutter_email_sender (0.0.1):
+    - Flutter
   - flutter_image_compress_common (1.0.0):
     - Flutter
     - Mantle
@@ -113,6 +115,7 @@ PODS:
 
 DEPENDENCIES:
   - Flutter (from `Flutter`)
+  - flutter_email_sender (from `.symlinks/plugins/flutter_email_sender/ios`)
   - flutter_image_compress_common (from `.symlinks/plugins/flutter_image_compress_common/ios`)
   - google_mlkit_commons (from `.symlinks/plugins/google_mlkit_commons/ios`)
   - google_mlkit_text_recognition (from `.symlinks/plugins/google_mlkit_text_recognition/ios`)
@@ -146,6 +149,8 @@ SPEC REPOS:
 EXTERNAL SOURCES:
   Flutter:
     :path: Flutter
+  flutter_email_sender:
+    :path: ".symlinks/plugins/flutter_email_sender/ios"
   flutter_image_compress_common:
     :path: ".symlinks/plugins/flutter_image_compress_common/ios"
   google_mlkit_commons:
@@ -167,6 +172,7 @@ EXTERNAL SOURCES:
 
 SPEC CHECKSUMS:
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
+  flutter_email_sender: 2397f5e84aaacfb61af569637a963e7c687858d8
   flutter_image_compress_common: 1697a328fd72bfb335507c6bca1a65fa5ad87df1
   google_mlkit_commons: f27386da2a4d88eb7c56b4dd38dfcf61d9257d57
   google_mlkit_text_recognition: 46fa320a20f0dc3f3a9b4e5bb27f3666f418d17d

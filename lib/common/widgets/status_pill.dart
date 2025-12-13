@@ -17,10 +17,26 @@ class StatusPill extends StatelessWidget {
   });
 
   /// Factory for OCR status
-  factory StatusPill.ocrStatus(OcrStatus status, {bool isInReport = false}) {
-    if (isInReport) {
+  /// isInDraftReport: receipt is in a draft report (not yet submitted)
+  /// isInSubmittedReport: receipt is in a submitted/approved/rejected report
+  factory StatusPill.ocrStatus(
+    OcrStatus status, {
+    bool isInReport = false,
+    bool isInDraftReport = false,
+    bool isInSubmittedReport = false,
+  }) {
+    // If in submitted report, show that prominently
+    if (isInSubmittedReport) {
       return const StatusPill(
-        label: 'In Report',
+        label: 'Submitted',
+        backgroundColor: AppColors.submitted,
+      );
+    }
+
+    // If in draft report, show that
+    if (isInDraftReport || isInReport) {
+      return const StatusPill(
+        label: 'In Draft',
         backgroundColor: AppColors.inReport,
       );
     }

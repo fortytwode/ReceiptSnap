@@ -25,7 +25,7 @@ class _ReceiptsListScreenState extends ConsumerState<ReceiptsListScreen> {
     {'value': 'pending_ocr', 'label': 'New'},
     {'value': 'needs_confirmation', 'label': 'Needs Review'},
     {'value': 'confirmed', 'label': 'Confirmed'},
-    {'value': 'in_report', 'label': 'In Report'},
+    {'value': 'in_report', 'label': 'In Draft'},
   ];
 
   @override
@@ -221,10 +221,11 @@ class _ReceiptCard extends StatelessWidget {
 
                     const SizedBox(height: 8),
 
-                    // Status pill
+                    // Status pill - receipts shown here are either not in a report
+                    // or in a draft report (submitted report receipts are filtered out)
                     StatusPill.ocrStatus(
                       receipt.ocrStatus,
-                      isInReport: receipt.isInReport,
+                      isInDraftReport: receipt.isInReport,
                     ),
                   ],
                 ),

@@ -99,6 +99,7 @@ class DatabaseService {
   }
 
   /// Get all receipts with optional filters
+  /// By default, hides receipts that are in submitted reports
   Future<List<Receipt>> getReceipts({
     String? status,
     String? search,
@@ -123,9 +124,17 @@ class DatabaseService {
           whereArgs.add('confirmed');
           break;
         case 'in_report':
+          // Only show receipts in DRAFT reports (not submitted)
+          whereClause += ' AND reportId IS NOT NULL';
+          break;
+        case 'in_submitted_report':
+          // Only show receipts in submitted reports
           whereClause += ' AND reportId IS NOT NULL';
           break;
       }
+    } else {
+      // Default: hide receipts that are in submitted reports
+      // We'll filter this in code after fetching since we need to check report status
     }
 
     if (search != null && search.isNotEmpty) {
@@ -264,6 +273,30 @@ class DatabaseService {
     }
 
     return reports;
+  }
+
+  /// Get IDs of all submitted (non-draft) reports
+  Future<Set<String>> getSubmittedReportIds() async {
+    final db = await database;
+    final maps = await db.query(
+      reportsTable,
+      columns: ['id'],
+      where: 'status != ?',
+      whereArgs: ['draft'],
+    );
+    return maps.map((m) => m['id'] as String).toSet();
+  }
+
+  /// Get IDs of all draft reports
+  Future<Set<String>> getDraftReportIds() async {
+    final db = await database;
+    final maps = await db.query(
+      reportsTable,
+      columns: ['id'],
+      where: 'status = ?',
+      whereArgs: ['draft'],
+    );
+    return maps.map((m) => m['id'] as String).toSet();
   }
 
   /// Get a single report by ID
