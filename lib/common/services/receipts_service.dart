@@ -55,6 +55,12 @@ class ReceiptsService {
       // Filter by status
       if (status != null && status.isNotEmpty) {
         switch (status.toLowerCase()) {
+          case 'draft':
+            // Show receipts NOT in any report (available for adding)
+            results = results
+                .where((r) => r.reportId == null)
+                .toList();
+            break;
           case 'new':
           case 'pending_ocr':
             results = results

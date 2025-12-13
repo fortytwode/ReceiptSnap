@@ -16,48 +16,52 @@ class StatusPill extends StatelessWidget {
     this.textColor = Colors.white,
   });
 
-  /// Factory for OCR status
-  /// isInDraftReport: receipt is in a draft report (not yet submitted)
-  /// isInSubmittedReport: receipt is in a submitted/approved/rejected report
-  factory StatusPill.ocrStatus(
-    OcrStatus status, {
-    bool isInReport = false,
-    bool isInDraftReport = false,
-    bool isInSubmittedReport = false,
+  /// Factory for receipt status
+  /// Simplified to show: Draft, In Report, or Submitted
+  factory StatusPill.receiptStatus({
+    required bool isInReport,
+    required bool isSubmitted,
+    bool isProcessing = false,
   }) {
-    // If in submitted report, show that prominently
-    if (isInSubmittedReport) {
+    if (isSubmitted) {
       return const StatusPill(
         label: 'Submitted',
         backgroundColor: AppColors.submitted,
       );
     }
 
-    // If in draft report, show that
-    if (isInDraftReport || isInReport) {
+    if (isInReport) {
       return const StatusPill(
-        label: 'In Draft',
+        label: 'In Report',
         backgroundColor: AppColors.inReport,
       );
     }
 
-    switch (status) {
-      case OcrStatus.pendingOcr:
-        return const StatusPill(
-          label: 'Processing',
-          backgroundColor: AppColors.pendingOcr,
-        );
-      case OcrStatus.needsConfirmation:
-        return const StatusPill(
-          label: 'Needs Review',
-          backgroundColor: AppColors.needsConfirmation,
-        );
-      case OcrStatus.confirmed:
-        return const StatusPill(
-          label: 'Confirmed',
-          backgroundColor: AppColors.confirmed,
-        );
+    if (isProcessing) {
+      return const StatusPill(
+        label: 'Processing',
+        backgroundColor: AppColors.pendingOcr,
+      );
     }
+
+    return const StatusPill(
+      label: 'Draft',
+      backgroundColor: AppColors.draft,
+    );
+  }
+
+  /// Legacy factory for OCR status - kept for backwards compatibility
+  factory StatusPill.ocrStatus(
+    OcrStatus status, {
+    bool isInReport = false,
+    bool isInDraftReport = false,
+    bool isInSubmittedReport = false,
+  }) {
+    return StatusPill.receiptStatus(
+      isInReport: isInDraftReport || isInReport,
+      isSubmitted: isInSubmittedReport,
+      isProcessing: status == OcrStatus.pendingOcr,
+    );
   }
 
   /// Factory for report status

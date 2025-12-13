@@ -111,6 +111,10 @@ class DatabaseService {
 
     if (status != null && status.isNotEmpty) {
       switch (status.toLowerCase()) {
+        case 'draft':
+          // Show receipts NOT in any report
+          whereClause += ' AND reportId IS NULL';
+          break;
         case 'pending_ocr':
           whereClause += ' AND ocrStatus = ?';
           whereArgs.add('pending_ocr');

@@ -9,6 +9,7 @@ import '../../../common/models/models.dart';
 import '../../../common/services/services.dart';
 import '../../../common/theme/app_theme.dart';
 import '../../../common/widgets/widgets.dart';
+import '../../receipts/providers/receipts_provider.dart';
 import '../providers/reports_provider.dart';
 
 class ReportDetailScreen extends ConsumerStatefulWidget {
@@ -387,6 +388,110 @@ class _ReportDetailScreenState extends ConsumerState<ReportDetailScreen> {
     }
   }
 
+  /// Show options to add a receipt to this report
+  void _showAddReceiptOptions(String reportId) {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                'Add Receipt',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('Take Photo'),
+              subtitle: const Text('Capture with camera'),
+              onTap: () {
+                Navigator.pop(ctx);
+                // Navigate to capture and pass reportId for auto-add
+                context.push('/capture?reportId=$reportId');
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Choose from Gallery'),
+              subtitle: const Text('Select existing photo'),
+              onTap: () {
+                Navigator.pop(ctx);
+                context.push('/capture?reportId=$reportId');
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.edit_note),
+              title: const Text('Manual Entry'),
+              subtitle: const Text('For cash expenses without a receipt'),
+              onTap: () {
+                Navigator.pop(ctx);
+                context.push('/manual-entry?reportId=$reportId');
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.receipt_long),
+              title: const Text('Add Existing Receipt'),
+              subtitle: const Text('Select from confirmed receipts'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _showSelectReceiptDialog(reportId);
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Show dialog to select existing confirmed receipts
+  Future<void> _showSelectReceiptDialog(String reportId) async {
+    final receiptsService = ref.read(receiptsServiceProvider);
+    final availableReceipts = await receiptsService.getAvailableForReport();
+
+    if (!mounted) return;
+
+    if (availableReceipts.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No confirmed receipts available to add'),
+        ),
+      );
+      return;
+    }
+
+    final selectedIds = await showDialog<List<String>>(
+      context: context,
+      builder: (context) => _SelectReceiptsDialog(receipts: availableReceipts),
+    );
+
+    if (selectedIds == null || selectedIds.isEmpty || !mounted) return;
+
+    // Add selected receipts to report
+    final reportsService = ref.read(reportsServiceProvider);
+    for (final id in selectedIds) {
+      await reportsService.addReceiptToReport(reportId, id);
+    }
+
+    ref.invalidate(reportDetailProvider(widget.reportId));
+    ref.read(receiptsProvider.notifier).refresh();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Added ${selectedIds.length} receipt(s) to report'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final reportAsync = ref.watch(reportDetailProvider(widget.reportId));
@@ -500,12 +605,23 @@ class _ReportDetailScreenState extends ConsumerState<ReportDetailScreen> {
 
           const SizedBox(height: 24),
 
-          // Receipts section
-          Text(
-            'Receipts',
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
+          // Receipts section header with Add button
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Receipts',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              if (report.status == ReportStatus.draft)
+                TextButton.icon(
+                  onPressed: () => _showAddReceiptOptions(report.id),
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('Add'),
+                ),
+            ],
           ),
           const SizedBox(height: 12),
 
@@ -513,13 +629,29 @@ class _ReportDetailScreenState extends ConsumerState<ReportDetailScreen> {
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(24),
-                child: Center(
-                  child: Text(
-                    'No receipts in this report',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurface.withOpacity(0.6),
+                child: Column(
+                  children: [
+                    Icon(
+                      Icons.receipt_long,
+                      size: 48,
+                      color: theme.colorScheme.onSurface.withOpacity(0.3),
                     ),
-                  ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'No receipts in this report',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurface.withOpacity(0.6),
+                      ),
+                    ),
+                    if (report.status == ReportStatus.draft) ...[
+                      const SizedBox(height: 16),
+                      ElevatedButton.icon(
+                        onPressed: () => _showAddReceiptOptions(report.id),
+                        icon: const Icon(Icons.add),
+                        label: const Text('Add Receipt'),
+                      ),
+                    ],
+                  ],
                 ),
               ),
             )
@@ -836,6 +968,91 @@ class _ReceiptTile extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Dialog for selecting existing receipts to add to a report
+class _SelectReceiptsDialog extends StatefulWidget {
+  final List<Receipt> receipts;
+
+  const _SelectReceiptsDialog({required this.receipts});
+
+  @override
+  State<_SelectReceiptsDialog> createState() => _SelectReceiptsDialogState();
+}
+
+class _SelectReceiptsDialogState extends State<_SelectReceiptsDialog> {
+  final Set<String> _selectedIds = {};
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final dateFormat = DateFormat.yMMMd();
+
+    return AlertDialog(
+      title: const Text('Select Receipts'),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: ListView.builder(
+          shrinkWrap: true,
+          itemCount: widget.receipts.length,
+          itemBuilder: (context, index) {
+            final receipt = widget.receipts[index];
+            final isSelected = _selectedIds.contains(receipt.id);
+
+            return CheckboxListTile(
+              value: isSelected,
+              onChanged: (value) {
+                setState(() {
+                  if (value == true) {
+                    _selectedIds.add(receipt.id);
+                  } else {
+                    _selectedIds.remove(receipt.id);
+                  }
+                });
+              },
+              title: Text(receipt.merchant ?? 'Unknown'),
+              subtitle: Text(
+                '${receipt.formattedAmount} • ${receipt.date != null ? dateFormat.format(receipt.date!) : "No date"}',
+              ),
+              secondary: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: receipt.imageUrl.isNotEmpty && receipt.imageUrl.startsWith('http')
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: CachedNetworkImage(
+                          imageUrl: receipt.imageUrl,
+                          fit: BoxFit.cover,
+                        ),
+                      )
+                    : Icon(
+                        receipt.imageUrl.isEmpty ? Icons.edit_note : Icons.receipt,
+                        size: 20,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+              ),
+            );
+          },
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: _selectedIds.isEmpty
+              ? null
+              : () => Navigator.pop(context, _selectedIds.toList()),
+          child: Text('Add ${_selectedIds.length} Receipt${_selectedIds.length != 1 ? 's' : ''}'),
+        ),
+      ],
     );
   }
 }

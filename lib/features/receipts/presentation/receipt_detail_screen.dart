@@ -494,26 +494,40 @@ class _ReceiptDetailScreenState extends ConsumerState<ReceiptDetailScreen> {
 
                     // Buttons - show if receipt is not in a submitted report
                     if (!_isReportSubmitted) ...[
-                      // Save Changes button (always visible)
-                      ElevatedButton(
-                        onPressed: _isLoading ? null : _saveChangesOnly,
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                        ),
-                        child: const Text('Save Changes'),
-                      ),
-
-                      // Add to Report button (only if not already in a report)
-                      if (!receipt.isInReport) ...[
-                        const SizedBox(height: 12),
-                        OutlinedButton(
-                          onPressed: _isLoading ? null : _showAddToReportDialog,
-                          style: OutlinedButton.styleFrom(
+                      // Side-by-side buttons for Save and Add to Report
+                      if (!receipt.isInReport)
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: _isLoading ? null : _saveChangesOnly,
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                ),
+                                child: const Text('Save'),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: _isLoading ? null : _showAddToReportDialog,
+                                style: ElevatedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                ),
+                                child: const Text('Add to Report'),
+                              ),
+                            ),
+                          ],
+                        )
+                      else
+                        // Just Save button when already in report
+                        ElevatedButton(
+                          onPressed: _isLoading ? null : _saveChangesOnly,
+                          style: ElevatedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 16),
                           ),
-                          child: const Text('Add to Report'),
+                          child: const Text('Save Changes'),
                         ),
-                      ],
 
                       // Show which report this receipt is in
                       if (receipt.isInReport) ...[

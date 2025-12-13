@@ -22,10 +22,8 @@ class _ReceiptsListScreenState extends ConsumerState<ReceiptsListScreen> {
 
   final List<Map<String, String>> _statusFilters = [
     {'value': '', 'label': 'All'},
-    {'value': 'pending_ocr', 'label': 'New'},
-    {'value': 'needs_confirmation', 'label': 'Needs Review'},
-    {'value': 'confirmed', 'label': 'Confirmed'},
-    {'value': 'in_report', 'label': 'In Draft'},
+    {'value': 'draft', 'label': 'Draft'},
+    {'value': 'in_report', 'label': 'In Report'},
   ];
 
   @override
