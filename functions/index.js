@@ -50,9 +50,9 @@ exports.sendExpenseReport = onCall(async (request) => {
   console.log(`Attempting to send email to: "${data.recipientEmail}"`);
   console.log(`Report title: "${data.reportTitle}"`);
 
-  // Build the email - Resend uses 'onboarding@resend.dev' for testing
+  // Build the email - using verified domain for production
   const emailData = {
-    from: "ReceiptSnap <onboarding@resend.dev>",
+    from: "ReceiptSnap <noreply@rocketshiphq.com>",
     to: [data.recipientEmail.trim().toLowerCase()],
     subject: `Expense Report: ${data.reportTitle}`,
     text: data.bodyText,
