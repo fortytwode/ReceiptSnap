@@ -46,10 +46,14 @@ exports.sendExpenseReport = onCall(async (request) => {
   // Set up Resend
   const resend = new Resend(apiKey);
 
+  // Log the recipient for debugging
+  console.log(`Attempting to send email to: "${data.recipientEmail}"`);
+  console.log(`Report title: "${data.reportTitle}"`);
+
   // Build the email - Resend uses 'onboarding@resend.dev' for testing
   const emailData = {
     from: "ReceiptSnap <onboarding@resend.dev>",
-    to: [data.recipientEmail],
+    to: [data.recipientEmail.trim().toLowerCase()],
     subject: `Expense Report: ${data.reportTitle}`,
     text: data.bodyText,
     html: data.bodyHtml || data.bodyText.replace(/\n/g, "<br>"),
